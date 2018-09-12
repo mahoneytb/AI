@@ -16,8 +16,9 @@ public abstract class Box {
 	public Point2D pos;
 	/** The width of the box */
 	private double width;
+	public boolean goalFailed = false;
 
-	private boolean include = true;
+	public boolean include = true;
 
 	/** Default Constructor */
 	public Box() {

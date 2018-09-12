@@ -22,7 +22,8 @@ public class FSM {
     private int current_box;                            // The current box
     private Tester tester;                              // Tester used for testing solutions
     private double current_grade;
-    private ArrayList<RobotConfig> robot_samples;       // Robot config C-space samples
+    private ArrayList<RobotConfig> robot_samples = new ArrayList<>();       // Robot config C-space samples
+    private ArrayList<RobotConfig> robotCollisionSet = new ArrayList<>();
     private ArrayList<Vertex> course_grid;              // Course grid for box connecting
     private ArrayList<Vertex> fine_grid;                // Fine grid for box connecting
     private ArrayList<Vertex> current_grid;             // The currently used grid, including box and goal positions
@@ -45,7 +46,7 @@ public class FSM {
 
     // Course and fine grid gradients
     private static double COURSE = 0.1;
-    private static double FINE = 0.01;
+    private static double FINE = 0.05;
 
     // Initial state
     private int current = START;
@@ -88,7 +89,6 @@ public class FSM {
         complete_path.createSolutionFile();
         ps.reset();
         try {
-
             ps.loadSolution("solution.txt");
             tester.testSolution();
 
@@ -96,6 +96,7 @@ public class FSM {
             System.out.println("FAILED: Invalid problem file");
             System.out.println(e1.getMessage());
         }
+        System.out.println("COMPLETED GOAL");
         return true;
     }
 
@@ -103,13 +104,12 @@ public class FSM {
 
     private void START() {
         // Reset all carried variables?
+        current_box = findClosest(ps.getMovingBoxes(), robot.getPos());
         current = BOX_SAMPLE;
     }
 
     // Sample C space for box to reach goal, ignore robot and movable boxes for now
     private void BOX_SAMPLE() {
-        // Find closest box to robot not at goal yet
-        current_box = findClosest(ps.getMovingBoxes(), robot.getPos());
         // First attempt is a course grid sample
         if (boxAttempt == 0) {
             current_grade = COURSE;
@@ -125,6 +125,8 @@ public class FSM {
         }
         else if (boxAttempt == 2) {
             System.out.println("Fine grid did not work, checking obstacles");
+            Box b = ps.getMovingBoxes().get(current_box);
+            b.goalFailed = true;
             current = OBSTACLE_CHECK;
         }
     }
@@ -136,11 +138,11 @@ public class FSM {
         for (Vertex v : current_grid) {
             if (v.collisionFree) {
                 // Check if path between vertices is collision free
-                checkVertexConnections(v);
+                checkVertexConnections(ps.getMovingBoxes().get(current_box), v);
             }
         }
         // Assert bi-directional connections
-        populateNeighbours();
+        populateNeighbours(current_grid);
         current = BOX_MAP;
     }
 
@@ -164,16 +166,45 @@ public class FSM {
     // Iterate through box pathway, sample robot positions between start and turns
     private void ROBOT_SAMPLE() {
         boxAttempt = 0;
-        RobotConfig goal = getRobotGoalPosition(grid_corners.get(grid_corners.size()-1));
-        robot_samples = robotSample(robot, goal);
+        RobotConfig goal = getRobotGoalPosition(grid_corners.get(grid_corners.size()-1),
+                ps.getMovingBoxes().get(current_box));
+        if (robotAttempt < 10) {
+            robotSample(robot, goal);
+        } else if (robotAttempt < 20) {
+            advancedSample(robot, goal);
+        } else {
+            robot_samples.clear();
+            System.out.println("Could not solve robot to goal");
+            Box b = ps.getMovingBoxes().get(current_box);
+            b.goalFailed = true;
+            goal_state = true;
+        }
         current = ROBOT_MAP;
     }
 
     private void ROBOT_MAP() {
+        for (RobotConfig r : robot_samples) {
+            r.g = 0;
+            r.cost = 0;
+        }
+
+        // Box appears to be up against a wall
+        if (robot_samples.size() < 4) {
+            Vertex failed = grid_corners.get(grid_corners.size()-1);
+            failed.collisionFree = false;
+            for (Vertex n : failed.getNeighbours()) {
+                n.setConnect(failed, false);
+                current = BOX_MAP;
+            }
+        }
+
         A_Star_Robot map = new A_Star_Robot(robot, robot_samples);
         if (map.compute()) {
             robotAttempt = 0;
             robot_map = map.pathway;
+            Box b = ps.getMovingBoxes().get(current_box);
+            b.goalFailed = false;
+            robot_samples.clear();
             current = ADD_TO_PATH;
         } else {
             robotAttempt += 1;
@@ -182,8 +213,8 @@ public class FSM {
     }
 
     private void ADD_TO_PATH() {
-        moveRobot();
-        moveBox();
+        moveRobot(robot_map);
+        moveBox(grid_corners, ps.getMovingBoxes().get(current_box));
 
         goal_state = true;
         for (int i = 0; i < ps.getMovingBoxes().size(); i++) {
@@ -194,11 +225,13 @@ public class FSM {
                 goal_state = false;
             }
         }
-        current = (grid_corners.size() > 1) ? ROBOT_SAMPLE : BOX_SAMPLE;
+        current = (grid_corners.size() > 1) ? ROBOT_SAMPLE : START;
     }
 
     private void OBSTACLE_CHECK() {
-
+        current_box = obstacleSorting();
+        boxAttempt = 0;
+        current = (current == BOX_SAMPLE) ? BOX_SAMPLE : START;
     }
 
     // *************************************   Private functions   ****************************************************
@@ -215,7 +248,7 @@ public class FSM {
             double by = round(ps.getMovingBoxEndPositions().get(i).getY(), 6);
             Point2D bxy = new Point2D.Double(bx, by);
             if (!b.pos.equals(bxy)) {
-                double d = pos.distance(bxy);
+                double d = pos.distance(b.getPos());
                 // Update closest if distance is shorter
                 if (d < shortest) {
                     index = i;
@@ -233,16 +266,13 @@ public class FSM {
         boolean iCourse = true;
         boolean jCourse;
         for (double i = 0.05; i<1; i=round(i+0.05, 2)) {
-            iCourse = !iCourse;
-            jCourse = true;
-            for (double j = 0.05; j<1; j=round(j+0.05, 2)) {
-                jCourse = !jCourse;
-                // 19x19 grid
+            for (double j = 0.05; j < 1; j = round(j + 0.05, 2)) {
+                course_grid.add(new Vertex(new Point2D.Double(i, j)));
+            }
+        }
+        for (double i = 0.01; i<1; i=round(i+0.01, 2)) {
+            for (double j = 0.01; j < 1; j = round(j+0.01, 2)) {
                 fine_grid.add(new Vertex(new Point2D.Double(i,j)));
-                if (iCourse && jCourse) {
-                    // 9x9 grid
-                    course_grid.add(new Vertex(new Point2D.Double(i,j)));
-                }
             }
         }
 
@@ -284,10 +314,10 @@ public class FSM {
 
     // Add points in line with box to the grid
     private ArrayList<Vertex> BoxToGrid(int b, double grade) {
-        double xb = ps.getMovingBoxes().get(b).getPos().getX();
-        double yb = ps.getMovingBoxes().get(b).getPos().getY();
-        double xg = ps.getMovingBoxEndPositions().get(b).getX();
-        double yg = ps.getMovingBoxEndPositions().get(b).getY();
+        double xb = round(ps.getMovingBoxes().get(b).getPos().getX(), 6);
+        double yb = round(ps.getMovingBoxes().get(b).getPos().getY(), 6);
+        double xg = round(ps.getMovingBoxEndPositions().get(b).getX(), 6);
+        double yg = round(ps.getMovingBoxEndPositions().get(b).getY(), 6);
 
         ArrayList<Vertex> newGrid;
         if (grade == COURSE) { newGrid = course_grid; }
@@ -300,7 +330,7 @@ public class FSM {
 
             Vertex v2 = new Vertex(new Point2D.Double(xb, i));
             findNeighbours(v2, newGrid, grade);
-            newGrid.add(v1);
+            newGrid.add(v2);
 
             Vertex v3 = new Vertex(new Point2D.Double(i, yg));
             findNeighbours(v3, newGrid, grade);
@@ -321,36 +351,48 @@ public class FSM {
         return newGrid;
     }
 
+    // Add points in line with box to the grid
+    private ArrayList<Vertex> BoxToGrid(Box b, double grade) {
+        double xb = round(b.getPos().getX(), 6);
+        double yb = round(b.getPos().getY(), 6);
+
+        ArrayList<Vertex> newGrid;
+        if (grade == COURSE) { newGrid = course_grid; }
+        else { newGrid = fine_grid; }
+
+        for (double i=grade; i < 1; i=round(i+grade, 2)) {
+            Vertex v1 = new Vertex(new Point2D.Double(i, yb));
+            findNeighbours(v1, newGrid, grade);
+            newGrid.add(v1);
+
+            Vertex v2 = new Vertex(new Point2D.Double(xb, i));
+            findNeighbours(v2, newGrid, grade);
+            newGrid.add(v2);
+        }
+        Vertex vb = new Vertex(new Point2D.Double(xb, yb));
+        findNeighbours(vb, newGrid, grade);
+        newGrid.add(vb);
+        return newGrid;
+    }
+
     // Find neighbours for newly added vertices
     private void findNeighbours(Vertex v, ArrayList<Vertex> grid, double d) {
         for (Vertex p : grid) {
             // Must be within distance
-            if (p.getPos().distance(v.getPos()) < d) {
+            if (p.getPos().distance(v.getPos()) <= d) {
                 // Must be new neighbour
                 if (!p.getNeighbours().contains(v)) {
                     // Must not be diagonal neighbour
-                    if (p.getPos().getX() == v.getPos().getX() ||
-                            p.getPos().getY() == v.getPos().getY()) {
+                    double vx = round(v.getPos().getX(), 5);
+                    double vy = round(v.getPos().getY(), 5);
+                    double px = round(p.getPos().getX(), 5);
+                    double py = round(p.getPos().getY(), 5);
+                    // Check if in line with v
+                    if ((px == vx) || (py == vy)) {
                         v.addNeighbour(p);
                     }
                 }
             }
-        }
-    }
-
-    // Check collision for a single vertex
-    private void checkVertexCollisions(Vertex v) {
-        double width = ps.getMovingBoxes().get(current_box).getWidth();
-        // Check collisions of each vertex
-        List<Box> newBoxConfig = new ArrayList<>();
-        newBoxConfig.addAll(ps.getMovingBoxes());
-        // Update box position to grid
-        Box newPos = new MovingBox(v.getPos(), width);
-        newBoxConfig.set(current_box, newPos);
-        // Include movable obstacles
-        newBoxConfig.addAll(ps.getMovingObstacles());
-        if (!tester.hasCollision(robot, newBoxConfig)) {
-            v.collisionFree = false;
         }
     }
 
@@ -365,38 +407,75 @@ public class FSM {
             newBoxConfig.set(current_box, newPos);
             // Include movable obstacles
             newBoxConfig.addAll(ps.getMovingObstacles());
+            ArrayList<Box> found = new ArrayList<>();
+            for (Box b : newBoxConfig) {
+                if (!b.include) {
+                    found.add(b);
+                }
+            }
+            newBoxConfig.removeAll(found);
             if (!tester.hasCollision(robot, newBoxConfig)) {
                 v.collisionFree = false;
+            } else {
+                v.collisionFree = true;
             }
         }
     }
 
+    // Check collision for a single vertex
+    private void checkObstacleCollisions(Box obs, Vertex v) {
+        double width = obs.getWidth();
+        // Check collisions of each vertex
+        List<Box> newBoxConfig = new ArrayList<>();
+        newBoxConfig.addAll(ps.getMovingBoxes());
+        newBoxConfig.addAll(ps.getMovingObstacles());
+        // Update box position to grid
+        Box newPos = new MovingBox(v.getPos(), width);
+        newBoxConfig.remove(obs);
+        newBoxConfig.add(newPos);
+        ArrayList<Box> found = new ArrayList<>();
+        for (Box b : newBoxConfig) {
+            if (!b.include) {
+                found.add(b);
+            }
+        }
+        newBoxConfig.removeAll(found);
+        if (!tester.hasCollision(robot, newBoxConfig)) {
+            v.collisionFree = false;
+        } else {
+            v.collisionFree = true;
+        }
+    }
+
     // Check the connectivity between neighbours in box grid, uses BFS
-    private void checkVertexConnections(Vertex v) {
+    private void checkVertexConnections(Box box, Vertex v) {
         // Check each neighbour, result is stored in Vertex class map
-        for (Vertex initial : v.getNeighbours()) {
-            checkVertexCollisions(initial);
+        for (Vertex n : v.getNeighbours()) {
+            checkObstacleCollisions(box, n);
+            if (!n.collisionFree) {
+                v.setConnect(n, false);
+                continue;
+            }
+            Vertex copy_n = new Vertex(n.getPos());
+            Vertex copy_v = new Vertex(v.getPos());
+            copy_n.addNeighbour(copy_v);
 
-            // Initial neighbour has collision
-            if (!initial.collisionFree) {
-                v.setConnect(initial, false);
-            } else {
-                initial.addNeighbour(v);
+            Queue<Vertex> queue = new LinkedList<>();
+            queue.add(copy_n);
 
-                Queue<Vertex> queue = new LinkedList<>();
-                queue.add(initial);
-
-                // BFS of splits along edge between vertices, no need to check if explored as each child is unique
-                while (!queue.isEmpty()) {
-                    Vertex current = queue.remove();
-                    // Found collision along connection
-                    if (!current.collisionFree) {
-                        v.setConnect(initial, false);
-                        break;
-                    } else {
-                        ArrayList<Vertex> children = split(current);
-                        if (children != null) {
-                            queue.addAll(children);
+            // BFS of splits along edge between vertices, no need to check if explored as each child is unique
+            while (!queue.isEmpty()) {
+                Vertex current = queue.remove();
+                // Found collision along connection
+                if (!current.collisionFree) {
+                    v.setConnect(n, false);
+                    break;
+                } else {
+                    ArrayList<Vertex> children = split(current);
+                    if (children != null) {
+                        queue.addAll(children);
+                        for (Vertex child : children) {
+                            checkObstacleCollisions(box, child);
                         }
                     }
                 }
@@ -421,35 +500,11 @@ public class FSM {
         return children;
     }
 
-    // Return split robot configs with neighbours of either side ****Implement actual tester checks to see if valid moves!!
-    private ArrayList<RobotConfig> split(RobotConfig r) {
-        ArrayList<RobotConfig> children = new ArrayList<>();
-        for (RobotConfig n : r.neighbours) {
-
-            //if (tester.isValidStep(r, n)) {
-            if ((r.getPos().distance(n.getPos()) < 0.0001) &&
-                    (Math.abs(r.getOrientation()-n.getOrientation()) < 0.0001)) {
-                return null;
-            }
-
-            Point2D mid = new Point2D.Double((n.getPos().getX() + r.getPos().getX()) / 2,
-                    (n.getPos().getY() + r.getPos().getY()) / 2);
-            double alpha = (r.opposite_rotation) ? Math.PI + (n.getOrientation() + r.getOrientation()) / 2 :
-                                                    (n.getOrientation() + r.getOrientation()) / 2;
-            alpha -= (alpha > (2*Math.PI)) ? 2*Math.PI : 0;
-            RobotConfig child = new RobotConfig(mid, alpha);
-            child.neighbours.add(n);
-            child.neighbours.add(r);
-            children.add(child);
-        }
-        return children;
-    }
-
     /* Until this point, neighbours have not been bi-directional in order to reduce double handling. This function
      * fully populates the neighbour network of the grid for collision free connections prior to pathfinding.
      */
-    private void populateNeighbours() {
-        for (Vertex v : current_grid) {
+    private void populateNeighbours(ArrayList<Vertex> grid) {
+        for (Vertex v : grid) {
             if (v.collisionFree) {
                 for (Vertex n : v.getNeighbours()) {
                     if (n.collisionFree) {
@@ -473,10 +528,9 @@ public class FSM {
     }
 
     // Get the robot push position for the box when at vertex v
-    private RobotConfig getRobotGoalPosition(Vertex v) {
+    private RobotConfig getRobotGoalPosition(Vertex v, Box b) {
         char d = v.direction;
         double gx = 0, gy = 0, galpha = 0;
-        Box b = ps.getMovingBoxes().get(current_box);
         switch (d) {
             case 'l':
                 gx = v.getPos().getX() + b.getWidth();
@@ -504,34 +558,35 @@ public class FSM {
     }
 
     // Return 100 tested and connected robotConfigs, mostly between r and g
-    private ArrayList<RobotConfig> robotSample(RobotConfig r, RobotConfig g) {
-        ArrayList<RobotConfig> samples = new ArrayList<>();
-
-        // Check direct start to goal connection
-        samples.add(r);
-        checkRobotConnections(g, samples);
-        if (g.neighbours.contains(r)) {
-            samples.add(g);
-            return samples;
-        }
-
+    private void robotSample(RobotConfig r, RobotConfig g) {
+        ArrayList<RobotConfig> samples = robot_samples;
         RobotConfig g2 = createOpposite(g);
-        checkRobotConnections(g2, samples);
-        if (g.neighbours.contains(r)) {
-            samples.add(g2);
-            return samples;
-        }
 
-        samples.add(g);
-        samples.add(g2);
-
-        addBasicMoves(samples);
         if (robotAttempt == 0) {
-            return samples;
+            samples.clear();
+            // Check direct start to goal connection
+            samples.add(r);
+            checkRobotConnections(g, samples);
+            if (g.neighbours.contains(r)) {
+                samples.add(g);
+                return;
+            }
+
+            checkRobotConnections(g2, samples);
+            if (g.neighbours.contains(r)) {
+                samples.add(g2);
+                return;
+            }
+
+            samples.add(g);
+            samples.add(g2);
+
+            addBasicMoves(samples);
+            return;
         }
 
         // Get bounds for probable samples: 0.1 outside of current max and min positions
-        double BOUND = 0.1;
+        double BOUND = 0.1 * (robotAttempt-1);
         double xmax = (r.getPos().getX() > g.getPos().getX()) ? r.getPos().getX() : g.getPos().getX();
         xmax = ((xmax + BOUND) > 1) ? 1 : (xmax + BOUND);
         double xmin = (r.getPos().getX() > g.getPos().getX()) ? g.getPos().getX() : r.getPos().getX();
@@ -545,12 +600,13 @@ public class FSM {
         double alphamax = (r.getOrientation() > g.getOrientation()) ? r.getOrientation() : g.getOrientation();
         double alphamin = (r.getOrientation() > g.getOrientation()) ? g.getOrientation() : r.getOrientation();
 
-        List<Box> newBoxConfig = ps.getMovingBoxes();
+        ArrayList<Box> newBoxConfig = new ArrayList<>();
+        newBoxConfig.addAll(ps.getMovingBoxes());
         newBoxConfig.addAll(ps.getMovingObstacles());
 
         // Sample 100 times with 70% chance of forcing being between the robot current position and the goal
         int n = 0;
-        while (n<100) {
+        while (n<50) {
             double x, y, alpha;
             // 70% we choose a point in the start to goal area
             if (generator.nextDouble() > 0.3) {
@@ -570,6 +626,7 @@ public class FSM {
 
             // Check for collisions
             if (!tester.hasCollision(s, newBoxConfig)) {
+                robotCollisionSet.add(s);
                 continue;
             }
 
@@ -591,11 +648,53 @@ public class FSM {
                 samples.add(g2);
                 samples.add(s);
                 samples.add(s2);
-                return samples;
+                return;
             }
         }
-        return samples;
+        return;
     }
+
+    // Sample more frequently about collisions to find gap
+    private void advancedSample(RobotConfig r, RobotConfig g) {
+
+        ArrayList<Box> newBoxConfig = new ArrayList<>();
+        newBoxConfig.addAll(ps.getMovingBoxes());
+        newBoxConfig.addAll(ps.getMovingObstacles());
+
+        // Sample 100 times with 70% chance of forcing being between the robot current position and the goal
+        int n = 0;
+        while (n<50) {
+            double x, y, alpha;
+            RobotConfig c = robotCollisionSet.get(generator.nextInt(robotCollisionSet.size()-1));
+            double xmax = (c.getPos().getX() + 0.05 < 1) ? c.getPos().getX() - 0.05 : 1;
+            double xmin = (xmax - 0.1 > 0) ? xmax - 0.1 : 0;
+            double ymax = (c.getPos().getY() + 0.05 < 1) ? c.getPos().getX() - 0.05 : 1;
+            double ymin = (xmax - 0.1 > 0) ? xmax - 0.1 : 0;
+
+            x = generator.nextDouble()*(xmax - xmin) + xmin;
+            y = generator.nextDouble()*(ymax - ymin) + ymin;
+            alpha = generator.nextDouble()*Math.PI*2;
+
+            RobotConfig s = new RobotConfig(new Point2D.Double(x, y), alpha);
+
+            // Check for collisions
+            if (!tester.hasCollision(s, newBoxConfig)) {
+                robotCollisionSet.add(s);
+                continue;
+            }
+
+            // Check for connections
+            checkRobotConnections(s, robot_samples);
+            n++;
+            RobotConfig s2 = createOpposite(s);
+            checkRobotConnections(s2, robot_samples);
+            n++;
+            robot_samples.add(s);
+            robot_samples.add(s2);
+        }
+        return;
+    }
+
     // Adds basic left down right up movements from start and goal to sample space
     private void addBasicMoves(ArrayList<RobotConfig> samples) {
         double STEP = 0.01;
@@ -632,7 +731,8 @@ public class FSM {
         samples.add(mid5);
         samples.add(mid6);
 
-        List<Box> newBoxConfig = ps.getMovingBoxes();
+        ArrayList<Box> newBoxConfig = new ArrayList<>();
+        newBoxConfig.addAll(ps.getMovingBoxes());
         newBoxConfig.addAll(ps.getMovingObstacles());
 
         ArrayList<RobotConfig> found = new ArrayList<>();
@@ -648,61 +748,9 @@ public class FSM {
         }
     }
 
-    // Check the connectivity between neighbours in robot C space, uses BFS
-    /*
     private void checkRobotConnections(RobotConfig r, ArrayList<RobotConfig> samples) {
-        // Check each neighbour, result is stored in RobotConfig class map
-        List<Box> newBoxConfig = ps.getMovingBoxes();
-        newBoxConfig.addAll(ps.getMovingObstacles());
-
-        for (RobotConfig n : samples) {
-            // Check direct start goal connection, or any connection less than 0.2 apart
-            if ((samples.size() > 1) && (r.getPos().distance(n.getPos()) > 0.2) || r.equals(n)) {
-                continue;
-            }
-            Queue<RobotConfig> queue = new LinkedList<>();
-            RobotConfig copy = new RobotConfig(n.getPos(), n.getOrientation());
-            copy.neighbours.add(r);
-            ArrayList<RobotConfig> initial = split(copy);
-            if (initial == null) {continue;}
-            queue.addAll(initial);
-            boolean collision_found = false;
-
-            // BFS of splits along edge between vertices, no need to check if explored as each child is unique
-            while (!queue.isEmpty() && !collision_found) {
-                RobotConfig current = queue.remove();
-                // Found collision along connection
-                if ((current.getPos().getX() != 0.1246) && (current.getPos().getX() > 0.12446) &&
-                        (current.getPos().getY() < 0.16612) && (current.getPos().getY() != 0.165) &&
-                        (current.getOrientation() != 1.504) && (current.getOrientation() > 1.5)) {
-                            System.out.println("here\n");
-                }
-                if (!tester.hasCollision(current, newBoxConfig)) {
-                    collision_found = true;
-                    continue;
-                }
-                ArrayList<RobotConfig> children = split(current);
-                if (children != null) {
-                    for (RobotConfig child : children) {
-                        if (!tester.hasCollision(child, newBoxConfig)) {
-                            collision_found = true;
-                            continue;
-                        }
-                    }
-                    queue.addAll(children);
-                }
-            }
-
-            if (!collision_found) {
-                r.neighbours.add(n);
-                n.neighbours.add(r);
-            }
-        }
-    }
-*/
-
-    private void checkRobotConnections(RobotConfig r, ArrayList<RobotConfig> samples) {
-        List<Box> newBoxConfig = ps.getMovingBoxes();
+        ArrayList<Box> newBoxConfig = new ArrayList<>();
+        newBoxConfig.addAll(ps.getMovingBoxes());
         newBoxConfig.addAll(ps.getMovingObstacles());
 
         for (RobotConfig s : samples) {
@@ -755,14 +803,14 @@ public class FSM {
     }
 
     // Add robot positions along mapped path to the complete pathway
-    private void moveRobot() {
+    private void moveRobot(ArrayList<RobotConfig> path) {
 
         List<Box> boxes = ps.getMovingBoxes();
         List<Box> obstacles = ps.getMovingObstacles();
 
-        for (int i = robot_map.size()-1; i > 0; i--) {
-            RobotConfig start = robot_map.get(i);
-            RobotConfig end = robot_map.get(i-1);
+        for (int i = path.size()-1; i > 0; i--) {
+            RobotConfig start = path.get(i);
+            RobotConfig end = path.get(i-1);
 
             // Set up initial guess at valid step size (includes sign yay)
             int FACTOR = 10;
@@ -798,19 +846,17 @@ public class FSM {
     }
 
     // Add robot and box positions along mapped path to the complete pathway
-    private void moveBox() {
+    private void moveBox(ArrayList<Vertex> grid, Box b) {
 
         List<Box> boxes = ps.getMovingBoxes();
         List<Box> obstacles = ps.getMovingObstacles();
 
         // Get robot start position
-        RobotConfig start = getRobotGoalPosition(grid_corners.get(grid_corners.size()-1));
+        RobotConfig start = getRobotGoalPosition(grid.get(grid.size()-1), b);
 
         // Compute robot end position based on chang in box position
-        double x_shift = grid_corners.get(grid_corners.size()-1).getPos().getX() -
-                grid_corners.get(grid_corners.size()-2).getPos().getX();
-        double y_shift = grid_corners.get(grid_corners.size()-1).getPos().getY() -
-                grid_corners.get(grid_corners.size()-2).getPos().getY();
+        double x_shift = grid.get(grid.size()-1).getPos().getX() - grid.get(grid.size()-2).getPos().getX();
+        double y_shift = grid.get(grid.size()-1).getPos().getY() - grid.get(grid.size()-2).getPos().getY();
         double[] pos = {start.getPos().getX() - x_shift, start.getPos().getY() - y_shift};
 
         RobotConfig end = new RobotConfig(pos, start.getOrientation());
@@ -832,7 +878,7 @@ public class FSM {
 
         // Add positions to pathway
         RobotConfig current_robot = new RobotConfig(start.getPos(), start.getOrientation());
-        Box current_box = boxes.get(this.current_box);
+        Box current_box = b;
         int count = 1;
         while (!tester.isValidStep(current_robot, end)) {
             current_robot.pos = new Point2D.Double(round(current_robot.getPos().getX() - count*x_dist/FACTOR, 6),
@@ -842,13 +888,13 @@ public class FSM {
            complete_path.addToPath(current_robot, boxes, obstacles);
         }
         robot = end;
-        current_box.pos = new Point2D.Double(round(grid_corners.get(grid_corners.size()-2).getPos().getX(), 6),
-                round(grid_corners.get(grid_corners.size()-2).getPos().getY(), 6));
+        current_box.pos = new Point2D.Double(round(grid.get(grid.size()-2).getPos().getX(), 6),
+                round(grid.get(grid.size()-2).getPos().getY(), 6));
         current_box.setRect();
         // Add the goal position
         complete_path.addToPath(robot, boxes, obstacles);
         // Delete last element of grid corners
-        grid_corners.remove(grid_corners.size()-1);
+        grid.remove(grid.size()-1);
     }
 
     private RobotConfig createOpposite(RobotConfig r) {
@@ -857,5 +903,233 @@ public class FSM {
         RobotConfig r2 = new RobotConfig(r.getPos(), counterAlpha);
         //r2.opposite_rotation = true;
         return r2;
+    }
+
+    // Recomputes a mapping for current box on current grid
+    private boolean recheckBoxPath() {
+        // SHould we add this?
+        constructGrids();
+        // FIX FINE GRID AND CHANGE THIS********************************************************
+        current_grid = BoxToGrid(current_box, COURSE);
+        // to here?
+        // Check if any vertices are collisions
+        checkGridCollisions();
+        for (Vertex v : current_grid) {
+            if (v.collisionFree) {
+                // Check if path between vertices is collision free
+                checkVertexConnections(ps.getMovingBoxes().get(current_box), v);
+            }
+        }
+        // Assert bi-directional connections
+        populateNeighbours(current_grid);
+
+        // Second to last element is initial position --See BoxToGrid
+        Vertex start = current_grid.get(current_grid.size()-2);
+        // Last element is goal position --See BoxToGrid
+        Vertex goal = current_grid.get(current_grid.size()-1);
+        A_Star map = new A_Star(start, goal, current_grade);
+        if (map.compute()) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    private int obstacleSorting() {
+
+        // First confirm there is a path! Include only the current box
+        for (int i = 0; i < n_boxes; i++) {
+            Box b = ps.getMovingBoxes().get(i);
+            b.include = (i == current_box);
+        }
+        for (Box o : ps.getMovingObstacles()) {
+            o.include = false;
+        }
+
+        constructGrids();
+        // FIX FINE GRID AND CHANGE THIS********************************************************
+        current_grid = BoxToGrid(current_box, COURSE);
+        if (!recheckBoxPath()) {
+            System.out.println("No solution found");
+            goal_state = true;
+            return -1;
+        }
+
+        // if yes keep adding boxes until no path found
+        boolean allClear = false;
+        ArrayList<Box> tried = new ArrayList<>();
+        while (!allClear) {
+            boolean found = false;
+            Box obstruction = null;
+            for (int i = 0; i < n_boxes; i++) {
+                Box b = ps.getMovingBoxes().get(i);
+                b.include = true;
+                if (!found && !tried.contains(b) && !recheckBoxPath()) {
+                    found = true;
+                    obstruction = b;
+                    if (!b.getPos().equals(ps.getMovingBoxEndPositions().get(i))) {
+                        // goalFailed tells us the box has been attempted to move to goal but cannot
+                        if (!b.goalFailed) {
+                            // we attempt to get the box to the goal to solve the obstruction
+                            System.out.println("Trying to get another box to goal");
+                            current_box = i;
+                            current = BOX_SAMPLE;
+                            boxAttempt = 0;
+                            allClear = true;
+                        }
+                    }
+                }
+            }
+            for (Box b : ps.getMovingObstacles()) {
+                b.include = true;
+                if (!found && !tried.contains(b) && !recheckBoxPath()) {
+                    obstruction = b;
+                }
+            }
+            // We have found a box in the way and are yet to attempt to take it to goal, skip the rest and return to try
+            if (allClear) { return current_box; }
+
+            // If no obstruction found which we have not tried, we have failed
+            if (obstruction == null) {
+                return -1;
+            }
+
+            // Attempt to move box to goal position (g = no longer an obstruction for current box)
+            if (moveObstruction(obstruction)) { tried.clear(); }
+            // If move attempt fails we try another obstruction
+            else { tried.add(obstruction); }
+
+            constructGrids();
+            BoxToGrid(current_box, current_grade);
+
+            if (recheckBoxPath()) { allClear = true; }
+        }
+        return current_box; //fix this
+    }
+
+    // Uses BFS to find closest position of box to move which will not be obstructing the path of current box
+    private boolean moveObstruction(Box obstruction) {
+        // Construct the grid for the obstruction to navigate
+        constructGrids();
+        ArrayList<Vertex> grid = BoxToGrid(obstruction, COURSE);
+
+        // Check for collisions and connections
+        for (Vertex v : grid) {
+            checkObstacleCollisions(obstruction, v);
+        }
+        for (Vertex v : grid) {
+            if (v.collisionFree) {
+                // Check if path between vertices is collision free
+                checkVertexConnections(obstruction, v);
+            }
+        }
+
+        // Assert bi-directional connections
+        populateNeighbours(grid);
+        // Second to last element is initial position --See BoxToGrid
+        Vertex start = grid.get(grid.size()-1);
+
+        // **************************************** BFS ************************************************
+
+        ArrayList<Box> allBoxes = new ArrayList<>();
+        allBoxes.addAll(ps.getMovingBoxes());
+        allBoxes.addAll(ps.getMovingObstacles());
+        Queue<Vertex> queue = new LinkedList<>();
+        queue.add(start);
+        Point2D initial = new Point2D.Double(start.getPos().getX(), start.pos.getY());
+        Vertex goal = null;
+        ArrayList<Vertex> explored = new ArrayList<>();
+
+        // BFS of splits along edge between vertices, no need to check if explored as each child is unique
+        while (!queue.isEmpty()) {
+            Vertex current = queue.remove();
+            // Update box position
+            obstruction.pos = current.pos;
+            obstruction.setRect();
+            // Check if solution
+            if (recheckBoxPath()) {
+                goal = current;
+                obstruction.pos = start.pos;
+                obstruction.setRect();
+                break;
+            } else {
+                for (Vertex n : current.getNeighbours()) {
+                    if (!explored.contains(n) && n.collisionFree && n.queryConnect(current)) {
+                        n.parent = current;
+                        queue.add(n);
+                    }
+                }
+            }
+            explored.add(current);
+        }
+
+        obstruction.pos = initial;
+        if (goal == null) { return false; }
+
+        ArrayList<Vertex> pathway = createPath(goal, start);
+
+        robotAttempt = 0;
+        boolean mapped = false;
+        ArrayList<RobotConfig> obs_map = new ArrayList<>();
+
+        while (robotAttempt < 10) {
+            RobotConfig Rgoal = getRobotGoalPosition(pathway.get(pathway.size()-1), obstruction);
+            if (robotAttempt < 20) {
+                robotSample(robot, Rgoal);
+            } else {
+                advancedSample(robot, Rgoal);
+            }
+            A_Star_Robot map = new A_Star_Robot(robot,robot_samples);
+            if (map.compute()) {
+                robotAttempt = 0;
+                obs_map = map.pathway;
+                moveRobot(obs_map);
+                moveBox(pathway, obstruction);
+
+                if (pathway.get(pathway.size() - 1).equals(goal)) {
+                    System.out.println("Obstacle moved"); // We're done
+                    return true;
+                }
+            } else {
+                robotAttempt += 1;
+            }
+        }
+        System.out.println("Could not solve robot to goal");
+        return false;
+    }
+
+    // Construct pathway only including corner vertices
+    private ArrayList<Vertex> createPath(Vertex v, Vertex start) {
+        ArrayList<Vertex> pathway = new ArrayList<>();
+        boolean finished = false;
+        //pathway.add(v);
+        while (!finished) {
+            Vertex p;
+
+            if (v.parent == null) {
+                break;
+            } else {
+                p = v.parent;
+            }
+
+            // Recompute direction
+            if (p.getPos().getX() < v.getPos().getX()) {
+                p.direction = 'r';
+            } else if (p.getPos().getX() > v.getPos().getX()) {
+                p.direction = 'l';
+            } else if (p.getPos().getY() > v.getPos().getY()) {
+                p.direction = 'd';
+            } else if (p.getPos().getY() < v.getPos().getY()) {
+                p.direction = 'u';
+            }
+
+            // If a corner add to pathway
+            if (p.direction != v.direction) {
+                pathway.add(v);
+            }
+            v = p;
+        }
+        pathway.add(start);
+        return pathway;
     }
 }

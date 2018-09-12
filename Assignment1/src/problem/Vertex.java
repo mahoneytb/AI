@@ -8,6 +8,7 @@ public class Vertex {
     public Point2D pos;
     private HashMap<Vertex, Boolean> m = new HashMap<Vertex, Boolean>();
     public boolean collisionFree = true;
+    public boolean outOfPathway = false;
     public Vertex parent;
     public int cost;
     public int g;

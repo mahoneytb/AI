@@ -261,5 +261,4 @@ public class ProblemSpec {
 			b.pos = movingBoxesStartPositions.get(i);
 		}
 	}
-
 }

@@ -14,7 +14,7 @@ public class A_Star {
 
     private Vertex start;
     private Vertex goal;
-    public ArrayList<Vertex> pathway = new ArrayList<Vertex>();
+    public ArrayList<Vertex> pathway = new ArrayList<>();
     private Double grade;
 
     public A_Star(Vertex start, Vertex goal, double grade){

@@ -22,7 +22,6 @@ public class Driver {
         FSM query = new FSM();
         query.loadProblem(ps);
         if (query.solve()) {
-            //Visualiser v = new Visualiser("1boxTest.txt", "solution.txt");
         }
         long endTime   = System.nanoTime();
         long totalTime = endTime - startTime;
