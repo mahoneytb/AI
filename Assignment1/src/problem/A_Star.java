@@ -35,7 +35,7 @@ public class A_Star {
 
         // Initialise priority queue and explored list
         PriorityQueue<Vertex> queue =
-                new PriorityQueue<Vertex>(5, new checkCost());
+                new PriorityQueue<>(5, new checkCost());
         ArrayList<Vertex> explored = new ArrayList<>();
         ArrayList<Vertex> gen1 = getChildren(start);
         Heuristic(gen1);
@@ -62,11 +62,9 @@ public class A_Star {
                     // only add if not yet explored
                     for (Vertex child : children) {
                         boolean done = false;
-                        for (Vertex e_vs : explored) {
-                            // if already explored...
-                            if (child.isEqual(e_vs)) {
-                                // add only if cost is lower
-                                if (child.cost >= e_vs.cost) {
+                        for (Vertex e : explored) {
+                            if (e.equals(child)) {
+                                if (e.cost <= child.cost) {
                                     done = true;
                                 }
                             }
@@ -102,26 +100,35 @@ public class A_Star {
             double cX = child.getPos().getX();
             double cY = child.getPos().getY();
             char d = child.direction;
-            boolean shortEdge = false;
+            boolean rightLine = false;
             // Check if shorter distance
-            if ((Math.abs(cX-gX) < 0.001) || (Math.abs(cY-gY) < 0.001)) { shortEdge = true; }
+            if ((Math.abs(cX-gX) < 0.001) || (Math.abs(cY-gY) < 0.001)) { rightLine = true; }
 
             boolean toward =    (cX<gX) && (d=='r') ||  // Child to the left of goal moving right
                                 (cX>gX) && (d=='l') ||  // Child to the right of goal moving left
                                 (cY<gY) && (d=='u') ||  // Child below the goal moving up
                                 (cY>gY) && (d=='d');    // Child above the goal moving down
 
-            if (toward || shortEdge)    { child.cost = child.g + 1; }
-            //else if (toward)            { child.cost = child.g + 1; }
-            else                        { child.cost = child.g + 5; }
+            if (child.sameAsParent)         { child.cost = child.g + 1000; }
+            else if (toward && rightLine)   { child.cost = child.g + 0; }
+            else if (toward)                { child.cost = child.g + 1; }
+            else                            { child.cost = child.g + 5; }
         }
     }
 
     // Get the children and assign direction and update g cost
     private ArrayList<Vertex> getChildren(Vertex v) {
-        ArrayList<Vertex> children = new ArrayList<Vertex>();
+        ArrayList<Vertex> children = new ArrayList<>();
         for (Vertex n : v.getNeighbours()) {
+            boolean nextChild = false;
             if (!v.queryConnect(n)) { continue; }
+            if (n.getPos().equals(v.getPos())) { continue; }
+            for (Vertex child : children) {
+                if (child.getPos().equals(n.getPos())) {
+                    nextChild = true;
+                }
+            }
+            if (nextChild) { continue; }
             if (n.getPos().getX() < v.getPos().getX()) {
                 n.direction = 'l';
             } else if (n.getPos().getX() > v.getPos().getX()) {
@@ -143,6 +150,7 @@ public class A_Star {
                     n.g = v.g + 10;
                 }
             }
+            if (n.equals(v)) { n.sameAsParent = true; }
             children.add(n);
         }
         return children;

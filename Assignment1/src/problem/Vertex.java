@@ -13,6 +13,7 @@ public class Vertex {
     public int cost;
     public int g;
     public char direction;
+    public boolean sameAsParent = false;
 
     public Vertex(Point2D pos) {
         this.pos = pos;

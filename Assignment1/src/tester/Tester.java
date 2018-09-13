@@ -414,7 +414,7 @@ public class Tester {
             movingObjects.addAll(ps.getMovingBoxPath().get(i));
             movingObjects.addAll(ps.getMovingObstaclePath().get(i));
             RobotConfig robot = ps.getRobotPath().get(i);
-            if (!hasCollision(robot, movingObjects)) {
+            if (!hasCollision(robot, movingObjects, false)) {
                 System.out.println("Collision at step " + i);
                 pass = false;
             }
@@ -499,17 +499,20 @@ public class Tester {
      * @param movingObjects state of all movable objects
      * @return true if no collision
      */
-    public boolean hasCollision(RobotConfig r, List<Box> movingObjects) {
+    public boolean hasCollision(RobotConfig r, List<Box> movingObjects, boolean ignoreRobot) {
         Line2D robotLine = new Line2D.Double(getPoint1(r), getPoint2(r));
         Rectangle2D border = new Rectangle2D.Double(0,0,1,1);
-        for (StaticObstacle o: ps.getStaticObstacles()) {
-            if (robotLine.intersects(grow(o.getRect(), -MAX_ERROR))) {
+
+        if (!ignoreRobot) {
+            for (StaticObstacle o : ps.getStaticObstacles()) {
+                if (robotLine.intersects(grow(o.getRect(), -MAX_ERROR))) {
+                    return false;
+                }
+            }
+
+            if (!border.contains(robotLine.getP1()) || !border.contains(robotLine.getP2())) {
                 return false;
             }
-        }
-
-        if (!border.contains(robotLine.getP1()) || !border.contains(robotLine.getP2())) {
-            return false;
         }
 
         for (Box b1: movingObjects) {
@@ -519,7 +522,7 @@ public class Tester {
             }
 
             Rectangle2D collisionBox = grow(b1.getRect(),-MAX_ERROR);
-            if (collisionBox.intersectsLine(robotLine)) {
+            if (collisionBox.intersectsLine(robotLine) && !ignoreRobot) {
                     return false;
             }
 
