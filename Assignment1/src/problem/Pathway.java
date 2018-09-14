@@ -14,20 +14,20 @@ public class Pathway {
     }
 
     public void addToPath(RobotConfig r, List<Box> boxes, List<Box> obstacles) {
-        ArrayList<Double> move = new ArrayList<Double>();
-        move.add(r.getPos().getX());
-        move.add(r.getPos().getY());
-        move.add(r.getOrientation());
+        ArrayList<Double> move = new ArrayList<>();
+        move.add(round(r.getPos().getX()));
+        move.add(round(r.getPos().getY()));
+        move.add(round(r.getOrientation()));
 
         for (Box b : boxes) {
             // When the problem is loaded we store the bottom left corner, solution file requires the center
-            move.add(b.getPos().getX() + b.getWidth()/2);
-            move.add(b.getPos().getY() + b.getWidth()/2);
+            move.add(round(b.getPos().getX() + b.getWidth()/2));
+            move.add(round(b.getPos().getY() + b.getWidth()/2));
         }
 
         for (Box o : obstacles) {
-            move.add(o.getPos().getX() + o.getWidth()/2);
-            move.add(o.getPos().getY() + o.getWidth()/2);
+            move.add(round(o.getPos().getX() + o.getWidth()/2));
+            move.add(round(o.getPos().getY() + o.getWidth()/2));
         }
 
         pathway.add(move);
@@ -51,5 +51,11 @@ public class Pathway {
         } catch (UnsupportedEncodingException e) {
             // do nothing
         }
+    }
+    private double round(double num) {
+        num = num * Math.pow(10, 6);
+        num = Math.round(num);
+        num = num / Math.pow(10, 6);
+        return num;
     }
 }

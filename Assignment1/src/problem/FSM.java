@@ -31,6 +31,7 @@ public class FSM {
                                                         // start position
     private ArrayList<RobotConfig> robot_map;           // List of robot configs from a start position to a goal position
     private Pathway complete_path = new Pathway();
+    private ArrayList<RobotConfig> robotGoals;
     Random generator = new Random(SEED);
 
     // FSM states
@@ -172,13 +173,16 @@ public class FSM {
     // Iterate through box pathway, sample robot positions between start and turns
     private void ROBOT_SAMPLE() {
         boxAttempt = 0;
-        RobotConfig goal = getRobotGoalPosition(grid_corners.get(grid_corners.size()-1),
-                ps.getMovingBoxes().get(current_box));
-        if (robotAttempt < 5) {
-            robotSample(robot, goal);
+        if (robotAttempt == 0) { // only return legal goals
+            robotGoals = getRobotGoalPositions(grid_corners.get(grid_corners.size() - 1),
+                    ps.getMovingBoxes().get(current_box));
+            robot_samples.clear();
+        }
+        if (robotAttempt < 10) {
+            robotSample(robot, robotGoals);
         } else if (robotAttempt < 20) {
             System.out.println("Advanced robot sampling");
-            advancedSample(robot, goal);
+            advancedSample();
         } else {
             robot_samples.clear();
             System.out.println("Could not solve robot to goal");
@@ -195,20 +199,15 @@ public class FSM {
             r.cost = 0;
         }
 
-        // Box appears to be up against a wall
-        /*
-        if (robot_samples.size() < 4) {
-            Vertex failed = grid_corners.get(grid_corners.size()-1);
-            failed.collisionFree = false;
-            for (Vertex n : failed.getNeighbours()) {
-                n.setConnect(failed, false);
-                current = BOX_MAP;
-            }
-        }*/
-
-        A_Star_Robot map = new A_Star_Robot(robot, robot_samples);
+        A_Star_Robot map = new A_Star_Robot(robot, robotGoals);
+        System.out.println("Mapping box: " + current_box);
+        System.out.println("Robot Attempt: " + robotAttempt);
+        System.out.println("Robot at: " + robot.getPos().getX() + " , " + robot.getPos().getY());
+        System.out.println("goals: " + robotGoals.get(1).getPos().getX() +  " , " + robotGoals.get(1).getPos().getY());
+        System.out.println("samples: " + robot_samples.size());
         if (map.compute()) {
             robotAttempt = 0;
+            robotCollisionSet.clear();
             robot_map = map.pathway;
             Box b = ps.getMovingBoxes().get(current_box);
             b.goalFailed = false;
@@ -565,65 +564,99 @@ public class FSM {
     }
 
     // Get the robot push position for the box when at vertex v
-    private RobotConfig getRobotGoalPosition(Vertex v, Box b) {
+    private ArrayList<RobotConfig> getRobotGoalPositions(Vertex v, Box b) {
         char d = v.direction;
-        double gx = 0, gy = 0, galpha = 0;
+        ArrayList<RobotConfig> goals = new ArrayList<>(0);
+        double gx1 = 0, gx2 = 0, gx3 = 0, gy1 = 0, gy2 = 0, gy3 = 0, galpha = 0, w = b.getWidth();
+        double BUFFER = round(w/20, 6);
         switch (d) {
             case 'l':
-                gx = v.getPos().getX() + b.getWidth();
-                gy = round(v.getPos().getY() + b.getWidth()/2, 6);
+                gx1 = round(v.getPos().getX() + w, 6);
+                gy1 = round(v.getPos().getY() + w/4 + BUFFER, 6);
+                gy2 = round(v.getPos().getY() + w/2, 6);
+                gy3 = round(v.getPos().getY() + 3*w/4 - BUFFER, 6);
                 galpha = round(Math.PI / 2, 6);
+                goals.add( new RobotConfig(new Point2D.Double(gx1, gy1), galpha));
+                goals.add( new RobotConfig(new Point2D.Double(gx1, gy2), galpha));
+                goals.add( new RobotConfig(new Point2D.Double(gx1, gy3), galpha));
                 break;
             case 'r':
-                gx = v.getPos().getX();
-                gy = round(v.getPos().getY() + b.getWidth()/2, 6);
+                gx1 = round(v.getPos().getX(), 6);
+                gy1 = round(v.getPos().getY() + w/4 + BUFFER, 6);
+                gy2 = round(v.getPos().getY() + w/2, 6);
+                gy3 = round(v.getPos().getY() + 3*w/4 - BUFFER, 6);
                 galpha = round(Math.PI / 2, 6);
+                goals.add( new RobotConfig(new Point2D.Double(gx1, gy1), galpha));
+                goals.add( new RobotConfig(new Point2D.Double(gx1, gy2), galpha));
+                goals.add( new RobotConfig(new Point2D.Double(gx1, gy3), galpha));
                 break;
             case 'u':
-                gx = round(v.getPos().getX() + b.getWidth()/2, 6);
-                gy = v.getPos().getY();
+                gx1 = round(v.getPos().getX() + w/4 + BUFFER, 6);
+                gx2 = round(v.getPos().getX() + w/2, 6);
+                gx3 = round(v.getPos().getX() + 3*w/4 - BUFFER, 6);
+                gy1 = round(v.getPos().getY(), 6);
                 galpha = 0;
+                goals.add( new RobotConfig(new Point2D.Double(gx1, gy1), galpha));
+                goals.add( new RobotConfig(new Point2D.Double(gx2, gy1), galpha));
+                goals.add( new RobotConfig(new Point2D.Double(gx3, gy1), galpha));
                 break;
             case 'd':
-                gx = round(v.getPos().getX() + b.getWidth()/2, 6);
-                gy = v.getPos().getY() + b.getWidth();
+                gx1 = round(v.getPos().getX() + w/4 + BUFFER, 6);
+                gx2 = round(v.getPos().getX() + w/2, 6);
+                gx3 = round(v.getPos().getX() + 3*w/4 - BUFFER, 6);
+                gy1 = round(v.getPos().getY() + w, 6);
                 galpha = 0;
+                goals.add( new RobotConfig(new Point2D.Double(gx1, gy1), galpha));
+                goals.add( new RobotConfig(new Point2D.Double(gx2, gy1), galpha));
+                goals.add( new RobotConfig(new Point2D.Double(gx3, gy1), galpha));
                 break;
         }
-        RobotConfig goal = new RobotConfig(new Point2D.Double(gx, gy), galpha);
-        return goal;
+        if (goals.size() == 0) {return null;}
+        ArrayList<RobotConfig> opposites = new ArrayList<>();
+        for (RobotConfig r : goals) {
+            opposites.add(createOpposite(r));
+        }
+        goals.addAll(opposites);
+
+        ArrayList<RobotConfig> fails = new ArrayList<>();
+        ArrayList<Box> allBoxes = new ArrayList<>();
+        allBoxes.addAll(ps.getMovingBoxes());
+        allBoxes.addAll(ps.getMovingObstacles());
+        for (RobotConfig g : goals) {
+            if (!tester.hasCollision(g, allBoxes, false)) {
+                fails.add(g);
+            }
+        }
+        goals.removeAll(fails);
+        return goals;
     }
 
     // Return 100 tested and connected robotConfigs, mostly between r and g
-    private void robotSample(RobotConfig r, RobotConfig g) {
+    private void robotSample(RobotConfig r, ArrayList<RobotConfig> goals) {
         ArrayList<RobotConfig> samples = robot_samples;
-        RobotConfig g2 = createOpposite(g);
 
         if (robotAttempt == 0) {
             samples.clear();
             // Check direct start to goal connection
             samples.add(r);
-            checkRobotConnections(g, samples);
-            if (g.neighbours.contains(r)) {
-                samples.add(g);
-                return;
+
+            for (RobotConfig g : goals) {
+                checkRobotConnections(g, samples);
+                if (g.neighbours.contains(r)) {
+                    samples.add(g);
+                    return;
+                }
             }
 
-            checkRobotConnections(g2, samples);
-            if (g.neighbours.contains(r)) {
-                samples.add(g2);
-                return;
-            }
-
-            samples.add(g);
-            samples.add(g2);
+            samples.addAll(goals);
 
             addBasicMoves(samples);
             return;
         }
 
+        RobotConfig g = goals.get(1); // The middle goal
         // Get bounds for probable samples: 0.1 outside of current max and min positions
-        double BOUND = 0.1 * (robotAttempt-1);
+        double BOUND = 0.1 * (robotAttempt);
         double xmax = (r.getPos().getX() > g.getPos().getX()) ? r.getPos().getX() : g.getPos().getX();
         xmax = ((xmax + BOUND) > 1) ? 1 : (xmax + BOUND);
         double xmin = (r.getPos().getX() > g.getPos().getX()) ? g.getPos().getX() : r.getPos().getX();
@@ -647,11 +680,11 @@ public class FSM {
             double x, y, alpha;
             // 70% we choose a point in the start to goal area
             if (generator.nextDouble() > 0.3) {
-                x = generator.nextDouble()*(xmax - xmin) + xmin;
-                y = generator.nextDouble()*(ymax - ymin) + ymin;
-                alpha = generator.nextDouble()*(alphamax - alphamin) + alphamin;
+                x = generator.nextDouble() * (xmax - xmin) + xmin;
+                y = generator.nextDouble() * (ymax - ymin) + ymin;
+                alpha = generator.nextDouble() * (alphamax - alphamin) + alphamin;
                 // Introduce opposite robot orientations
-                alpha +=  (generator.nextDouble() > 0.5) ? Math.PI : 0;
+                alpha += (generator.nextDouble() > 0.5) ? Math.PI : 0;
                 alpha -= (alpha > (Math.PI * 2)) ? Math.PI * 2 : 0;
             } else {
                 x = generator.nextDouble();
@@ -677,22 +710,34 @@ public class FSM {
             samples.add(s2);
 
             // Early finish if the current sample bridges the start and goal positions
-            if ((s.neighbours.contains(r) && (s.neighbours.contains(g) || s.neighbours.contains(g2))) ||
-                    (s2.neighbours.contains(r) && (s2.neighbours.contains(g) || s2.neighbours.contains(g2)))) {
-                samples.clear();
-                samples.add(r);
-                samples.add(g);
-                samples.add(g2);
-                samples.add(s);
-                samples.add(s2);
-                return;
+            if (s.neighbours.contains(r)) {
+                for (RobotConfig goal : goals) {
+                    if (s.neighbours.contains(goal)) {
+                        samples.clear();
+                        samples.add(r);
+                        samples.add(g);
+                        samples.add(s);
+                        return;
+                    }
+                }
+            }
+            if (s2.neighbours.contains(r)) {
+                for (RobotConfig goal : goals) {
+                    if (s.neighbours.contains(goal)) {
+                        samples.clear();
+                        samples.add(r);
+                        samples.add(g);
+                        samples.add(s);
+                        return;
+                    }
+                }
             }
         }
         return;
     }
 
     // Sample more frequently about collisions to find gap
-    private void advancedSample(RobotConfig r, RobotConfig g) {
+    private void advancedSample() {
 
         ArrayList<Box> newBoxConfig = new ArrayList<>();
         newBoxConfig.addAll(ps.getMovingBoxes());
@@ -712,9 +757,9 @@ public class FSM {
             y = generator.nextDouble()*(ymax - ymin) + ymin;
 
             // Focus on vertical and horizontal positions to navigate rectangular gaps
-            double alphaDelta = generator.nextDouble()*0.2 - 0.1;
+            double alphaDelta = generator.nextDouble()*0.4 + Math.PI - 0.2;
             int alphaOrientation = generator.nextInt(10);
-            alpha = (alphaOrientation > 0.5) ? alphaDelta : alphaDelta + Math.PI/2;
+            alpha = (alphaOrientation > 5) ? alphaDelta : alphaDelta + Math.PI/2;
 
             RobotConfig s = new RobotConfig(new Point2D.Double(x, y), alpha);
 
@@ -742,35 +787,35 @@ public class FSM {
         ArrayList<RobotConfig> newMoves = new ArrayList<>();
 
         for (RobotConfig r : samples) {
-            newMoves.add(new RobotConfig(new Point2D.Double(r.getPos().getX() - STEP,
+            newMoves.add(new RobotConfig(new Point2D.Double(round(r.getPos().getX() - STEP, 6),
                     r.getPos().getY()), r.getOrientation()));
-            newMoves.add(new RobotConfig(new Point2D.Double(r.getPos().getX() + STEP,
+            newMoves.add(new RobotConfig(new Point2D.Double(round(r.getPos().getX() + STEP, 6),
                     r.getPos().getY()), r.getOrientation()));
             newMoves.add(new RobotConfig(new Point2D.Double(r.getPos().getX(),
-                    r.getPos().getY() + STEP), r.getOrientation()));
+                    round(r.getPos().getY() - STEP, 6)), r.getOrientation()));
             newMoves.add(new RobotConfig(new Point2D.Double(r.getPos().getX(),
-                    r.getPos().getY() + STEP), r.getOrientation()));
+                    round(r.getPos().getY() + STEP, 6)), r.getOrientation()));
         }
 
         samples.addAll(newMoves);
 
         // Mid moves
         RobotConfig r = samples.get(0);
-        RobotConfig g = samples.get(1);
-        RobotConfig g2 = samples.get(2);
-        RobotConfig mid1 = new RobotConfig(new Point2D.Double(r.getPos().getX(), g.getPos().getY()), r.getOrientation());
-        RobotConfig mid2 = new RobotConfig(new Point2D.Double(r.getPos().getX(), g.getPos().getY()), g.getOrientation());
-        RobotConfig mid3 = new RobotConfig(new Point2D.Double(g.getPos().getX(), r.getPos().getY()), r.getOrientation());
-        RobotConfig mid4 = new RobotConfig(new Point2D.Double(g.getPos().getX(), r.getPos().getY()), g.getOrientation());
-        RobotConfig mid5 = new RobotConfig(new Point2D.Double(r.getPos().getX(), g.getPos().getY()), g2.getOrientation());
-        RobotConfig mid6 = new RobotConfig(new Point2D.Double(g.getPos().getX(), r.getPos().getY()), g2.getOrientation());
+        ArrayList<RobotConfig> newBridgeMoves = new ArrayList<>();
+        for (int i = 1; i < samples.size(); i++) {
+            RobotConfig g = samples.get(i);
 
-        samples.add(mid1);
-        samples.add(mid2);
-        samples.add(mid3);
-        samples.add(mid4);
-        samples.add(mid5);
-        samples.add(mid6);
+            RobotConfig mid1 = new RobotConfig(new Point2D.Double(r.getPos().getX(), g.getPos().getY()), r.getOrientation());
+            RobotConfig mid2 = new RobotConfig(new Point2D.Double(r.getPos().getX(), g.getPos().getY()), g.getOrientation());
+            RobotConfig mid3 = new RobotConfig(new Point2D.Double(g.getPos().getX(), r.getPos().getY()), r.getOrientation());
+            RobotConfig mid4 = new RobotConfig(new Point2D.Double(g.getPos().getX(), r.getPos().getY()), g.getOrientation());
+
+            newBridgeMoves.add(mid1);
+            newBridgeMoves.add(mid2);
+            newBridgeMoves.add(mid3);
+            newBridgeMoves.add(mid4);
+        }
+        samples.addAll(newBridgeMoves);
 
         ArrayList<Box> newBoxConfig = new ArrayList<>();
         newBoxConfig.addAll(ps.getMovingBoxes());
@@ -805,7 +850,7 @@ public class FSM {
             double y_dist = (s.getPos().getY() - r.getPos().getY());
             double alpha_dist = (s.getOrientation() - r.getOrientation());
 
-            if ((Math.abs(x_dist) > 0.1*robotAttempt) || (Math.abs(y_dist) > 0.1*robotAttempt)) {
+            if ((Math.abs(x_dist) > 0.1*(robotAttempt+1)) || (Math.abs(y_dist) > 0.1*(robotAttempt+1))) {
                 continue;
             }
 
@@ -855,9 +900,9 @@ public class FSM {
 
             // Set up initial guess at valid step size (includes sign yay)
             int FACTOR = 10;
-            double x_dist = (start.getPos().getX() - end.getPos().getX());
-            double y_dist = (start.getPos().getY() - end.getPos().getY());
-            double alpha_dist = (start.getOrientation() - end.getOrientation());
+            double x_dist = round((start.getPos().getX() - end.getPos().getX()), 6);
+            double y_dist = round((start.getPos().getY() - end.getPos().getY()), 6);
+            double alpha_dist = round((start.getOrientation() - end.getOrientation()), 6);
 
             RobotConfig test = new RobotConfig(new Point2D.Double(start.getPos().getX() + x_dist/FACTOR,
                     start.getPos().getY() + y_dist/FACTOR), start.getOrientation() + alpha_dist/FACTOR);
@@ -883,6 +928,7 @@ public class FSM {
                 complete_path.addToPath(current, boxes, obstacles);
             }
             complete_path.addToPath(end, boxes, obstacles);
+            robot = end;
         }
     }
 
@@ -892,8 +938,8 @@ public class FSM {
         List<Box> boxes = ps.getMovingBoxes();
         List<Box> obstacles = ps.getMovingObstacles();
 
-        // Get robot start position
-        RobotConfig start = getRobotGoalPosition(grid.get(grid.size()-1), b);
+        // Get robot start position --hope this works...
+        RobotConfig start = robot;//getRobotGoalPositions(grid.get(grid.size()-1), b);
 
         // Compute robot end position based on chang in box position
         double x_shift = grid.get(grid.size()-1).getPos().getX() - grid.get(grid.size()-2).getPos().getX();
@@ -1092,17 +1138,23 @@ public class FSM {
         robotAttempt = 0;
         boolean mapped = false;
         ArrayList<RobotConfig> obs_map = new ArrayList<>();
-
-        while (robotAttempt < 10) {
-            RobotConfig Rgoal = getRobotGoalPosition(pathway.get(pathway.size()-1), obstruction);
-            if (robotAttempt < 20) {
-                robotSample(robot, Rgoal);
-            } else {
-                advancedSample(robot, Rgoal);
+        ArrayList<RobotConfig> Rgoals = new ArrayList<>();
+        while (robotAttempt < 20) {
+            if (robotAttempt == 0) {
+                Rgoals = getRobotGoalPositions(pathway.get(pathway.size()-1), obstruction);
+                robot_samples.clear();
             }
-            A_Star_Robot map = new A_Star_Robot(robot,robot_samples);
+
+            if (robotAttempt < 10) {
+                robotSample(robot, Rgoals);
+            } else {
+                advancedSample();
+            }
+            A_Star_Robot map = new A_Star_Robot(robot, Rgoals);
             if (map.compute()) {
+                robotCollisionSet.clear();
                 robotAttempt = 0;
+                robot_samples.clear();
                 obs_map = map.pathway;
                 moveRobot(obs_map);
                 moveBox(pathway, obstruction);

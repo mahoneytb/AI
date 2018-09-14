@@ -398,7 +398,7 @@ public class Tester {
         if (m1 <= n1) {
             return (m2 - n1 >= 0.75 * ps.getRobotWidth());
         } else {
-            return (n2 - m1 >= 0.85 * ps.getRobotWidth());
+            return (n2 - m1 >= 0.75 * ps.getRobotWidth());
         }
     }
 
@@ -502,6 +502,7 @@ public class Tester {
     public boolean hasCollision(RobotConfig r, List<Box> movingObjects, boolean ignoreRobot) {
         Line2D robotLine = new Line2D.Double(getPoint1(r), getPoint2(r));
         Rectangle2D border = new Rectangle2D.Double(0,0,1,1);
+        Rectangle2D edgeDetect = new Rectangle2D.Double(0.001, 0.001, 0.998, 0.998);
 
         if (!ignoreRobot) {
             for (StaticObstacle o : ps.getStaticObstacles()) {
@@ -516,10 +517,12 @@ public class Tester {
         }
 
         for (Box b1: movingObjects) {
-
-            if (!border.contains(b1.getRect())) {
+            // Replaced border with edgeDetect
+            if (!edgeDetect.contains(b1.getRect())) {
                 return false;
             }
+
+
 
             Rectangle2D collisionBox = grow(b1.getRect(),-MAX_ERROR);
             if (collisionBox.intersectsLine(robotLine) && !ignoreRobot) {
@@ -527,13 +530,25 @@ public class Tester {
             }
 
             for (Box b2: movingObjects) {
-                if ((!b1.equals(b2)) && (collisionBox.intersects(b2.getRect()))) {
-                    return false;
+                if (!b1.equals(b2)) {
+                    Rectangle2D movingEdgeDetect = new Rectangle2D.Double(b2.getRect().getMinX() - 0.001,
+                            b2.getRect().getMinY() - 0.001,
+                            b2.getRect().getWidth() + 0.002,
+                            b2.getRect().getHeight() + 0.002);
+                    // Replaced b2.getRect with movingEdgeDetect
+                    if (collisionBox.intersects(movingEdgeDetect)){
+                        return false;
+                    }
                 }
             }
 
             for (StaticObstacle o: ps.getStaticObstacles()) {
-                if (collisionBox.intersects(o.getRect())) {
+                    Rectangle2D staticEdgeDetect = new Rectangle2D.Double(o.getRect().getMinX() - 0.001,
+                                                                        o.getRect().getMinY() - 0.001,
+                                                                        o.getRect().getWidth() + 0.002,
+                                                                        o.getRect().getHeight() + 0.002);
+                    // Replaced o.getRect() with staticEdgeDetect
+                if (collisionBox.intersects(staticEdgeDetect)) {
                     return false;
                 }
             }

@@ -47,17 +47,19 @@ public class StaticObstacle {
 			xs.add(s.nextDouble());
 			ys.add(s.nextDouble());
 		}
-		double EXTRA = 0.001;
+		//double EXTRA = 0.001;
 		double xMin = Collections.min(xs);
-		xMin = ((xMin - EXTRA) > 0) ? xMin - EXTRA : 0;
+		//xMin = ((xMin - EXTRA) > 0) ? xMin - EXTRA : 0;
 		double xMax = Collections.max(xs);
-		xMax = ((xMax + EXTRA) < 1) ? xMax + EXTRA : 1;
+		//xMax = ((xMax + EXTRA) < 1) ? xMax + EXTRA : 1;
 		double yMin = Collections.min(ys);
-		yMin = ((yMin + EXTRA) > 0) ? yMin - EXTRA : 0;
+		//yMin = ((yMin + EXTRA) > 0) ? yMin - EXTRA : 0;
 		double yMax = Collections.max(ys);
-		yMax = ((yMax + EXTRA) < 1) ? yMax + EXTRA : 1;
-		this.rect = new Rectangle2D.Double(xMin-EXTRA, yMin-EXTRA, xMax - xMin + 2*EXTRA,
-				yMax - yMin + 2*EXTRA);
+		//yMax = ((yMax + EXTRA) < 1) ? yMax + EXTRA : 1;
+		//this.rect = new Rectangle2D.Double(xMin-EXTRA, yMin-EXTRA, xMax - xMin + 2*EXTRA,
+		//		yMax - yMin + 2*EXTRA);
+		this.rect = new Rectangle2D.Double(xMin, yMin, xMax - xMin,
+						yMax - yMin);
 		s.close();
 	}
 

@@ -11,16 +11,12 @@ public class A_Star_Robot {
 
     private RobotConfig start;
     private ArrayList<RobotConfig> goals = new ArrayList<>();
-    public ArrayList<RobotConfig> pathway = new ArrayList<RobotConfig>();
+    public ArrayList<RobotConfig> pathway = new ArrayList<>();
 
     public A_Star_Robot(RobotConfig start, ArrayList<RobotConfig> goals){
-        RobotConfig g1 = goals.get(1);
-        g1.cost = 0;
-        this.goals.add(g1);
-        if (goals.size() > 2) {
-            RobotConfig g2 = goals.get(1);
-            g2.cost = 0;
-            this.goals.add(g2);
+        for (RobotConfig g : goals) {
+            g.cost = 0;
+            this.goals.add(g);
         }
         this.start = start;
     }
@@ -35,8 +31,7 @@ public class A_Star_Robot {
         }
 
         // Initialise priority queue and explored list
-        PriorityQueue<RobotConfig> queue =
-                new PriorityQueue<RobotConfig>(5, new checkCost());
+        PriorityQueue<RobotConfig> queue = new PriorityQueue<>(5, new checkCost());
         ArrayList<RobotConfig> explored = new ArrayList<>();
         ArrayList<RobotConfig> gen1 = getChildren(start);
         Heuristic(gen1, start);
