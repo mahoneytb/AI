@@ -38,7 +38,6 @@ public class Vertex {
 
     // See if vertex is in the same position
     public boolean isEqual(Vertex v) {
-        if (pos.equals(v.getPos())) { return true; }
-        return false;
+        return pos.equals(v.getPos());
     }
 }

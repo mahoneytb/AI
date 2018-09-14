@@ -1,8 +1,10 @@
 package problem;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,7 +37,7 @@ public class Pathway {
 
     public void createSolutionFile() {
         try {
-            PrintWriter writer = new PrintWriter("solution.txt", "UTF-8");
+            PrintWriter writer = new PrintWriter("solution.txt", StandardCharsets.UTF_8);
             writer.println(pathway.size());
             writer.flush();
             for (ArrayList<Double> line : pathway) {
@@ -50,6 +52,8 @@ public class Pathway {
             // do nothing
         } catch (UnsupportedEncodingException e) {
             // do nothing
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
     private double round(double num) {

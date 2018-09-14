@@ -23,7 +23,7 @@ public class A_Star_Robot {
 
     // Perform A* search
     public boolean compute(){
-
+        if (goals.isEmpty()) { return false; }
         // Check if goal is reached
         if(goals.contains(this.start)){
             return true;

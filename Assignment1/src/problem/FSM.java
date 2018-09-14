@@ -13,13 +13,14 @@ public class FSM {
 
     // Initialize transition variables
     private static int SEED = 1;
+    private static int KEEP = -1;                       // Keep box in collision check
     private boolean goal_state = false;                 // Have we reached the final goal state?
     private int boxAttempt = 0;                         // Attempt number for box to goal mapping
     private int robotAttempt = 0;
     private int n_boxes;                                // Number of boxes
     private ProblemSpec ps;                             // Current problem spec
     private RobotConfig robot;                          // Current robot configuration
-    private int current_box;                            // The current box
+    private int current_box = -1;                            // The current box
     private Tester tester;                              // Tester used for testing solutions
     private double current_grade = COURSE;
     private ArrayList<RobotConfig> robot_samples = new ArrayList<>();       // Robot config C-space samples
@@ -31,6 +32,7 @@ public class FSM {
                                                         // start position
     private ArrayList<RobotConfig> robot_map;           // List of robot configs from a start position to a goal position
     private Pathway complete_path = new Pathway();
+    boolean advanced = false;
     private ArrayList<RobotConfig> robotGoals;
     Random generator = new Random(SEED);
 
@@ -103,7 +105,7 @@ public class FSM {
 
     private void START() {
         // Reset all carried variables?
-        current_box = findClosest(ps.getMovingBoxes(), robot.getPos());
+        current_box = findClosest(ps.getMovingBoxes(), robot.getPos(), false);
         current = BOX_SAMPLE;
     }
 
@@ -173,22 +175,38 @@ public class FSM {
     // Iterate through box pathway, sample robot positions between start and turns
     private void ROBOT_SAMPLE() {
         boxAttempt = 0;
+        Vertex goal = current_grid.get(current_grid.size()-1);
+        handleSameCorners(goal);
+
         if (robotAttempt == 0) { // only return legal goals
             robotGoals = getRobotGoalPositions(grid_corners.get(grid_corners.size() - 1),
                     ps.getMovingBoxes().get(current_box));
             robot_samples.clear();
         }
-        if (robotAttempt < 10) {
-            robotSample(robot, robotGoals);
-        } else if (robotAttempt < 20) {
-            System.out.println("Advanced robot sampling");
-            advancedSample();
-        } else {
-            robot_samples.clear();
+        if (robotAttempt > 8) {
+            resetRobotSampler();
             System.out.println("Could not solve robot to goal");
             Box b = ps.getMovingBoxes().get(current_box);
             b.goalFailed = true;
-            goal_state = true;
+            current_box = findClosest(ps.getMovingBoxes(), robot.getPos(), true);
+            current = BOX_SAMPLE;
+            return;
+        }
+        if (!advanced || (robotCollisionSet.size()<5)) {
+            if (robotGoals.isEmpty()) {
+                resetRobotSampler();
+                current_box = findClosest(ps.getMovingBoxes(), robot.getPos(), true);
+                current = BOX_SAMPLE;
+                return;
+            }
+            robotSample(robot, robotGoals);
+            if (robotAttempt > 0) {
+                advanced = true;
+            }
+        } else {
+            System.out.println("Advanced robot sampling");
+            advancedSample();
+            advanced = false;
         }
         current = ROBOT_MAP;
     }
@@ -200,18 +218,11 @@ public class FSM {
         }
 
         A_Star_Robot map = new A_Star_Robot(robot, robotGoals);
-        System.out.println("Mapping box: " + current_box);
-        System.out.println("Robot Attempt: " + robotAttempt);
-        System.out.println("Robot at: " + robot.getPos().getX() + " , " + robot.getPos().getY());
-        System.out.println("goals: " + robotGoals.get(1).getPos().getX() +  " , " + robotGoals.get(1).getPos().getY());
-        System.out.println("samples: " + robot_samples.size());
         if (map.compute()) {
-            robotAttempt = 0;
-            robotCollisionSet.clear();
+            resetRobotSampler();
             robot_map = map.pathway;
             Box b = ps.getMovingBoxes().get(current_box);
             b.goalFailed = false;
-            robot_samples.clear();
             current = ADD_TO_PATH;
         } else {
             robotAttempt += 1;
@@ -245,12 +256,15 @@ public class FSM {
     // *************************************   Private functions   ****************************************************
 
     // Find closest box to robot
-    private int findClosest(List<Box> boxes, Point2D pos) {
+    private int findClosest(List<Box> boxes, Point2D pos, boolean notCurrent) {
         double shortest = 10;
         int index = 0;
         // Check each box
         for (int i = 0; i < boxes.size(); i++) {
             Box b = boxes.get(i);
+            if (notCurrent && i == (current_box)) {
+                continue;
+            }
             //Check box is not already at goal
             double bx = round(ps.getMovingBoxEndPositions().get(i).getX(), 6);
             double by = round(ps.getMovingBoxEndPositions().get(i).getY(), 6);
@@ -264,6 +278,7 @@ public class FSM {
                 }
             }
         }
+        System.out.println("Trying box: " + index);
         return index;
     }
 
@@ -283,8 +298,7 @@ public class FSM {
         if (!goalV.collisionFree) {return true;}
         goalV.pos = new Point2D.Double(goal.getX(), round(goal.getY() - 0.001, 5));
         checkObstacleCollisions(b, goalV);
-        if (!goalV.collisionFree) {return true;}
-        return false;
+        return !goalV.collisionFree;
     }
 
     // Construct the C space box position course grids
@@ -448,11 +462,7 @@ public class FSM {
                 }
             }
             newBoxConfig.removeAll(found);
-            if (!tester.hasCollision(robot, newBoxConfig, ignoreRobot)) {
-                v.collisionFree = false;
-            } else {
-                v.collisionFree = true;
-            }
+            v.collisionFree = tester.hasCollision(robot, newBoxConfig, ignoreRobot);
         }
     }
 
@@ -474,11 +484,7 @@ public class FSM {
             }
         }
         newBoxConfig.removeAll(found);
-        if (!tester.hasCollision(robot, newBoxConfig, true)) {
-            v.collisionFree = false;
-        } else {
-            v.collisionFree = true;
-        }
+        v.collisionFree = tester.hasCollision(robot, newBoxConfig, true);
     }
 
     // Check the connectivity between neighbours in box grid, uses BFS
@@ -523,7 +529,7 @@ public class FSM {
         // For each neighbour, create a middle child and return
         for (Vertex n : v.getNeighbours()) {
             // Might need to double check this, trying to only add children if over the movement limit
-            if (n.getPos().distance(v.getPos())<0.001) { return children; };
+            if (n.getPos().distance(v.getPos())<0.001) { return children; }
             Point2D mid = new Point2D.Double((n.getPos().getX() + v.getPos().getX()) / 2,
                     (n.getPos().getY() + v.getPos().getY()) / 2);
             Vertex midV = new Vertex(mid);
@@ -612,6 +618,11 @@ public class FSM {
                 break;
         }
         if (goals.size() == 0) {return null;}
+
+        checkRobGoalsAreValid(goals, b);
+
+        if (goals.size() == 0) {return null;}
+
         ArrayList<RobotConfig> opposites = new ArrayList<>();
         for (RobotConfig r : goals) {
             opposites.add(createOpposite(r));
@@ -631,6 +642,28 @@ public class FSM {
         return goals;
     }
 
+    // This checks if the robot will have any collisions hanging of the end of the box while pushing
+    private void checkRobGoalsAreValid (ArrayList<RobotConfig> goals, Box box) {
+        Vertex start = grid_corners.get(grid_corners.size()-1);
+        Vertex end = grid_corners.get(grid_corners.size()-2);
+        double xDif = round(end.getPos().getX() - start.getPos().getX(), 6);
+        double yDif = round(end.getPos().getY() - start.getPos().getY(), 6);
+
+        if ((xDif == 0) && (yDif == 0)) { return; }
+        ArrayList<RobotConfig> fails = new ArrayList<>();
+        for (int i = 0; i < goals.size(); i++) {
+            if (i == 1) { continue; }
+            RobotConfig g = goals.get(i);
+            Point2D g_end_p = new Point2D.Double(g.getPos().getX()+xDif, g.getPos().getY()+yDif);
+            RobotConfig g_end = new RobotConfig(g_end_p, g.getOrientation());
+            ArrayList<RobotConfig> check = new ArrayList<>();
+            check.add(g);
+            checkRobotConnections(g_end, check, box);
+            if (!g.neighbours.contains(g_end)) { fails.add(g); }
+        }
+        goals.removeAll(fails);
+    }
+
     // Return 100 tested and connected robotConfigs, mostly between r and g
     private void robotSample(RobotConfig r, ArrayList<RobotConfig> goals) {
         ArrayList<RobotConfig> samples = robot_samples;
@@ -641,7 +674,7 @@ public class FSM {
             samples.add(r);
 
             for (RobotConfig g : goals) {
-                checkRobotConnections(g, samples);
+                checkRobotConnections(g, samples, null);
                 if (g.neighbours.contains(r)) {
                     samples.add(g);
                     return;
@@ -654,7 +687,9 @@ public class FSM {
             return;
         }
 
-        RobotConfig g = goals.get(1); // The middle goal
+        RobotConfig g;
+        if (goals.size() > 1) { g = goals.get(1); } // The middle goal
+        else g = goals.get(0);
         // Get bounds for probable samples: 0.1 outside of current max and min positions
         double BOUND = 0.1 * (robotAttempt);
         double xmax = (r.getPos().getX() > g.getPos().getX()) ? r.getPos().getX() : g.getPos().getX();
@@ -701,10 +736,10 @@ public class FSM {
             }
 
             // Check for connections
-            checkRobotConnections(s, samples);
+            checkRobotConnections(s, samples, null);
             n++;
             RobotConfig s2 = createOpposite(s);
-            checkRobotConnections(s2, samples);
+            checkRobotConnections(s2, samples, null);
             n++;
             samples.add(s);
             samples.add(s2);
@@ -770,10 +805,10 @@ public class FSM {
             }
 
             // Check for connections
-            checkRobotConnections(s, robot_samples);
+            checkRobotConnections(s, robot_samples, null);
             n++;
             RobotConfig s2 = createOpposite(s);
-            checkRobotConnections(s2, robot_samples);
+            checkRobotConnections(s2, robot_samples, null);
             n++;
             robot_samples.add(s);
             robot_samples.add(s2);
@@ -830,14 +865,17 @@ public class FSM {
         samples.removeAll(found);
         for (RobotConfig s : samples) {
             // Check for connections
-            checkRobotConnections(s, samples);
+            checkRobotConnections(s, samples, null);
         }
     }
 
-    private void checkRobotConnections(RobotConfig r, ArrayList<RobotConfig> samples) {
+    private void checkRobotConnections(RobotConfig r, ArrayList<RobotConfig> samples, Box box) {
         ArrayList<Box> newBoxConfig = new ArrayList<>();
         newBoxConfig.addAll(ps.getMovingBoxes());
         newBoxConfig.addAll(ps.getMovingObstacles());
+        if (box != null) {
+            newBoxConfig.remove(box);
+        }
 
         for (RobotConfig s : samples) {
             if (s.neighbours.contains(r) || s.equals(r)) {
@@ -846,8 +884,8 @@ public class FSM {
 
             // Set up initial guess at valid step size (includes sign yay)
             int FACTOR = 10;
-            double x_dist = (s.getPos().getX() - r.getPos().getX());
-            double y_dist = (s.getPos().getY() - r.getPos().getY());
+            double x_dist = round((s.getPos().getX() - r.getPos().getX()), 6);
+            double y_dist = round((s.getPos().getY() - r.getPos().getY()), 6);
             double alpha_dist = (s.getOrientation() - r.getOrientation());
 
             if ((Math.abs(x_dist) > 0.1*(robotAttempt+1)) || (Math.abs(y_dist) > 0.1*(robotAttempt+1))) {
@@ -1013,11 +1051,7 @@ public class FSM {
         // Last element is goal position --See BoxToGrid
         Vertex goal = current_grid.get(current_grid.size()-1);
         A_Star map = new A_Star(start, goal, current_grade);
-        if (map.compute()) {
-            return true;
-        } else {
-            return false;
-        }
+        return map.compute();
     }
 
     private int obstacleSorting() {
@@ -1080,7 +1114,9 @@ public class FSM {
 
             if (recheckBoxPath()) { allClear = true; }
         }
-        return current_box; //fix this
+        // Try next box
+        current_box = findClosest(ps.getMovingBoxes(), robot.getPos(), true);
+        return current_box;
     }
 
     // Uses BFS to find closest position of box to move which will not be obstructing the path of current box
@@ -1133,37 +1169,41 @@ public class FSM {
         obstruction.pos = initial;
         if (goal == null) { return false; }
 
-        ArrayList<Vertex> pathway = createPath(goal, start);
+        grid_corners = createPath(goal, start);
 
         robotAttempt = 0;
         boolean mapped = false;
         ArrayList<RobotConfig> obs_map = new ArrayList<>();
         ArrayList<RobotConfig> Rgoals = new ArrayList<>();
-        while (robotAttempt < 20) {
+        while (robotAttempt < 8) {
+
+            if (handleSameCorners(goal)) { return true; }
+
             if (robotAttempt == 0) {
-                Rgoals = getRobotGoalPositions(pathway.get(pathway.size()-1), obstruction);
+                Rgoals = getRobotGoalPositions(grid_corners.get(grid_corners.size()-1), obstruction);
                 robot_samples.clear();
             }
-
-            if (robotAttempt < 10) {
+            if (!advanced || (robotCollisionSet.size()<5)) {
+                if (Rgoals.isEmpty()) {
+                    resetRobotSampler();
+                    return false;
+                }
                 robotSample(robot, Rgoals);
+                if (robotAttempt > 0) {
+                    advanced = true;
+                }
             } else {
+                advanced = false;
                 advancedSample();
             }
             A_Star_Robot map = new A_Star_Robot(robot, Rgoals);
             if (map.compute()) {
-                robotCollisionSet.clear();
-                robotAttempt = 0;
-                robot_samples.clear();
+                resetRobotSampler();
                 obs_map = map.pathway;
                 moveRobot(obs_map);
-                moveBox(pathway, obstruction);
+                moveBox(grid_corners, obstruction);
 
-                if (pathway.get(pathway.size() - 1).equals(goal)) {
-                    System.out.println("Obstacle moved"); // We're done
-                    current = BOX_SAMPLE;
-                    return true;
-                }
+                if (handleSameCorners(goal)) { return true; }
             } else {
                 robotAttempt += 1;
             }
@@ -1226,5 +1266,33 @@ public class FSM {
         for (Box o : ps.getMovingObstacles()) {
             o.include = true;
         }
+    }
+
+    // It just resets the robot sampler really
+    private void resetRobotSampler() {
+        advanced = false;
+        robotAttempt = 0;
+        robotCollisionSet.clear();
+        robot_samples.clear();
+    }
+
+    // If the same corners popup in the grid, they get deleted
+    private boolean handleSameCorners(Vertex goal) {
+        if (grid_corners.get(grid_corners.size() - 1).equals(goal)) {
+            System.out.println("Obstacle moved"); // We're done
+            current = BOX_SAMPLE;
+            return true;
+        }
+
+        while(grid_corners.get(grid_corners.size()-1).getPos().equals(
+                grid_corners.get(grid_corners.size()-2).getPos())) {
+            grid_corners.remove(grid_corners.size()-1);
+            if (grid_corners.get(grid_corners.size() - 1).equals(goal)) {
+                System.out.println("Obstacle moved"); // We're done
+                current = BOX_SAMPLE;
+                return true;
+            }
+        }
+        return false;
     }
 }

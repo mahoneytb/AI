@@ -168,10 +168,7 @@ public class Tester {
         if (getPoint1(r1).distance(getPoint1(r2)) > MAX_BASE_STEP + MAX_ERROR) {
             return false;
         }
-        if (getPoint2(r1).distance(getPoint2(r2)) > MAX_BASE_STEP + MAX_ERROR) {
-            return false;
-        }
-        return true;
+        return !(getPoint2(r1).distance(getPoint2(r2)) > MAX_BASE_STEP + MAX_ERROR);
     }
 
     /**
@@ -282,10 +279,7 @@ public class Tester {
             return false;
         }
 
-        if (actualDirection != 0 && actualDirection != direction) {
-            return false;
-        }
-        return true;
+        return actualDirection == 0 || actualDirection == direction;
     }
 
     /**
@@ -333,10 +327,7 @@ public class Tester {
      */
     public boolean isAxisAligned(RobotConfig r) {
         double angle = normaliseAngle(r.getOrientation() + angleError) % (0.5 * Math.PI);
-        if (angle <= 2 * angleError) {
-            return true;
-        }
-        return false;
+        return angle <= 2 * angleError;
     }
 
     /**
