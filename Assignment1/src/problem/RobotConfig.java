@@ -18,7 +18,7 @@ public class RobotConfig {
     public int cost;
     public int g;
     public RobotConfig parent;
-    public boolean opposite_rotation = false;
+    public boolean closer = false;
 
     /**
 	 * Constructs a configuration of the robot

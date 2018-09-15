@@ -183,7 +183,7 @@ public class FSM {
                     ps.getMovingBoxes().get(current_box));
             robot_samples.clear();
         }
-        if (robotAttempt > 8) {
+        if (robotAttempt > 9) {
             resetRobotSampler();
             System.out.println("Could not solve robot to goal");
             Box b = ps.getMovingBoxes().get(current_box);
@@ -192,7 +192,7 @@ public class FSM {
             current = BOX_SAMPLE;
             return;
         }
-        if (!advanced || (robotCollisionSet.size()<5)) {
+        if (!advanced || (robotCollisionSet.size()<4)) {
             if (robotGoals.isEmpty()) {
                 resetRobotSampler();
                 current_box = findClosest(ps.getMovingBoxes(), robot.getPos(), true);
@@ -407,12 +407,28 @@ public class FSM {
                 }
             }
         }
+
+        if (isBox && (idx == current_box)) {
+            if ((xg != 0) && (yg != 0)) {
+                if ((yg != yb) && (xg != xb)) {
+                    Vertex vgb1 = new Vertex(new Point2D.Double(xb, yg));
+                    findNeighbours(vgb1, newGrid, grade);
+                    newGrid.add(vgb1);
+                    Vertex vgb2 = new Vertex(new Point2D.Double(xg, yb));
+                    findNeighbours(vgb2, newGrid, grade);
+                    newGrid.add(vgb1);
+                }
+            }
+        }
+
+        // Add current position
         if ((xb != 0) && (yb != 0)) {
             Vertex vb = new Vertex(new Point2D.Double(xb, yb));
             findNeighbours(vb, newGrid, grade);
             newGrid.add(vb);
         }
 
+        // Add goal position
         if (isBox && (idx == current_box)) {
             if ((xg != 0) && (yg != 0)) {
                 Vertex vg = new Vertex(new Point2D.Double(xg, yg));
@@ -1175,7 +1191,7 @@ public class FSM {
         boolean mapped = false;
         ArrayList<RobotConfig> obs_map = new ArrayList<>();
         ArrayList<RobotConfig> Rgoals = new ArrayList<>();
-        while (robotAttempt < 8) {
+        while (robotAttempt < 9) {
 
             if (handleSameCorners(goal)) { return true; }
 
@@ -1183,7 +1199,7 @@ public class FSM {
                 Rgoals = getRobotGoalPositions(grid_corners.get(grid_corners.size()-1), obstruction);
                 robot_samples.clear();
             }
-            if (!advanced || (robotCollisionSet.size()<5)) {
+            if (!advanced || (robotCollisionSet.size()<4)) {
                 if (Rgoals.isEmpty()) {
                     resetRobotSampler();
                     return false;
@@ -1279,7 +1295,6 @@ public class FSM {
     // If the same corners popup in the grid, they get deleted
     private boolean handleSameCorners(Vertex goal) {
         if (grid_corners.get(grid_corners.size() - 1).equals(goal)) {
-            System.out.println("Obstacle moved"); // We're done
             current = BOX_SAMPLE;
             return true;
         }
@@ -1288,7 +1303,6 @@ public class FSM {
                 grid_corners.get(grid_corners.size()-2).getPos())) {
             grid_corners.remove(grid_corners.size()-1);
             if (grid_corners.get(grid_corners.size() - 1).equals(goal)) {
-                System.out.println("Obstacle moved"); // We're done
                 current = BOX_SAMPLE;
                 return true;
             }

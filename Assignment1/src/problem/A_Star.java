@@ -101,6 +101,8 @@ public class A_Star {
             double cY = child.getPos().getY();
             char d = child.direction;
             boolean rightLine = false;
+            boolean isGoal = false;
+            if ((Math.abs(cX-gX) < 0.001) && (Math.abs(cY-gY) < 0.001)) { isGoal = true; }
             // Check if shorter distance
             if ((Math.abs(cX-gX) < 0.001) || (Math.abs(cY-gY) < 0.001)) { rightLine = true; }
 
@@ -109,9 +111,10 @@ public class A_Star {
                                 (cY<gY) && (d=='u') ||  // Child below the goal moving up
                                 (cY>gY) && (d=='d');    // Child above the goal moving down
 
-            if (child.sameAsParent)         { child.cost = child.g + 1000; }
-            else if (toward && rightLine)   { child.cost = child.g + 0; }
-            else if (toward)                { child.cost = child.g + 1; }
+            //if (child.sameAsParent)         { child.cost = child.g + 1000; }
+            if (isGoal)                { child.cost = child.g + 0; }
+            else if (toward && rightLine)   { child.cost = child.g + 1; }
+            else if (toward)                { child.cost = child.g + 2; }
             else                            { child.cost = child.g + 5; }
         }
     }

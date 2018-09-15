@@ -99,10 +99,11 @@ public class A_Star_Robot {
 
             if (goals.contains(child)) {
                 child.cost = 0;
-            } else if (current.getPos().getY() == g.getY() || child.getPos().getX() == g.getX()) {
+            } else if (child.closer) {
+            //(current.getPos().getY() == g.getY() || child.getPos().getX() == g.getX()) {
                 child.cost = current.g + 1;
             } else {
-                child.cost = current.g + 10;
+                child.cost = current.g + 2;
             }
         }
     }
@@ -115,15 +116,17 @@ public class A_Star_Robot {
             if (v.equals(start)) {
                 n.g = 1;
             }
-            // Otherwise, compare direction with parent and update cost: +1 if straight, +10 if turn
             else {
                 Point2D g = goals.get(0).getPos();
-                if (goals.contains(n)) {
-                    n.g = v.g + 0;
-                } else if (v.getPos().distance(g) < n.getPos().distance(g)) {
-                    n.g = v.g + 1;
-                } else {
-                    n.g = v.g + 2;
+                //if (goals.contains(n)) {
+                //    n.g = v.g + 0;
+                //} else {//if (v.getPos().distance(g) < n.getPos().distance(g)) {
+                n.g = v.g + 5;
+                //} //else {
+                    //n.g = v.g + 2;
+                //}
+                if (v.getPos().distance(g) < n.getPos().distance(g)) {
+                    n.closer = true;
                 }
             }
             children.add(n);
