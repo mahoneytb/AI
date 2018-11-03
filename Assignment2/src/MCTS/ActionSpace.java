@@ -4,6 +4,7 @@ import problem.*;
 
 import java.util.ArrayList;
 import java.util.Random;
+import java.io.*;
 
 // The list of actions for any given node
 public class ActionSpace {
@@ -20,7 +21,7 @@ public class ActionSpace {
     private int n_tires;
     private ArrayList<Integer> set_pressures;
 
-    public ActionSpace(ProblemSpec ps) {
+    public ActionSpace(ProblemSpec ps, Node node) {
         this.ps = ps;
         car_type = new ArrayList();
         driver = new ArrayList();
@@ -33,35 +34,66 @@ public class ActionSpace {
 
         move = false;
         fuel = false;
+        ActionType previous;
+        if (node.getAction() != null) {
+            previous = node.getAction().getActionType();
+        } else {
+            previous = ActionType.MOVE;
+        }
 
-        for (int c = 0; c < n_cars; c++) {
-            car_type.add(false);
+        // We don't want to repeat an action unless move or refuel. And we don't want to consider
+        // actions that are already part of our state
+        if (previous != ActionType.CHANGE_CAR) {
+            for (int c = 0; c < n_cars; c++) {
+                if (c != ps.getCarOrder().indexOf(node.getCarType())) {
+                    car_type.add(false);
+                } else car_type.add(true);
+            }
         }
-        for (int d = 0; d < n_drivers; d++) {
-            driver.add(false);
+
+        if (previous != ActionType.CHANGE_DRIVER) {
+            for (int d = 0; d < n_drivers; d++) {
+                if (d != ps.getDriverOrder().indexOf(node.getDriver())) {
+                    driver.add(false);
+                } else driver.add(true);
+            }
         }
-        for (int t = 0; t < n_tires; t++) {
-            tire_type.add(false);
-        }
-        for (int p = 0; p < 3; p++) {
-            pressure.add(false);
+
+        if (previous != ActionType.CHANGE_TIRES) {
+            for (int t = 0; t < n_tires; t++) {
+                if (t != ps.getTireOrder().indexOf(node.getTireModel())) {
+                    tire_type.add(false);
+                } else tire_type.add(true);
+            }
         }
 
         set_pressures = new ArrayList();
         set_pressures.add(50);
         set_pressures.add(75);
         set_pressures.add(100);
+
+        if (previous != ActionType.CHANGE_PRESSURE) {
+            for (int p = 0; p < 3; p++) {
+                if (!set_pressures.get(p).equals(node.getTirePressure())) {
+                    pressure.add(false);
+                } else pressure.add(true);
+            }
+        }
     }
 
     // Return a random action which is yet to be explored
     public Action getNextUnexploredAction() {
         ArrayList<Integer> actions = new ArrayList<>();
-        if (!move)                      { actions.add(0); }
-        if (car_type.contains(false))   { actions.add(1); }
-        if (driver.contains(false))     { actions.add(2); }
-        if (tire_type.contains(false))  { actions.add(3); }
-        if (!fuel)                      { actions.add(4); }
-        if (pressure.contains(false))   { actions.add(5); }
+        if (!move) {
+            actions.add(0);
+            actions.add(1);
+            actions.add(2);
+        }
+        if (car_type.contains(false))   { actions.add(3); }
+        if (driver.contains(false))     { actions.add(4); }
+        if (tire_type.contains(false))  { actions.add(5); }
+        if (!fuel)                      { actions.add(6); }
+        if (pressure.contains(false))   { actions.add(7); }
         if (actions.isEmpty()) {
             return null;
         }
@@ -74,6 +106,12 @@ public class ActionSpace {
                 move = true;
                 return new Action(ActionType.MOVE);
             case 1:
+                move = true;
+                return new Action(ActionType.MOVE);
+            case 2:
+                move = true;
+                return new Action(ActionType.MOVE);
+            case 3:
                 r = rand.nextInt(n_cars);
                 while (car_type.get(r)) {
                     r = rand.nextInt(n_cars);
@@ -81,7 +119,7 @@ public class ActionSpace {
                 String c = ps.getCarOrder().get(r);
                 car_type.set(r, true);
                 return new Action(ActionType.CHANGE_CAR, c);
-            case 2:
+            case 4:
                 r = rand.nextInt(n_drivers);
                 while (driver.get(r)) {
                     r = rand.nextInt(n_drivers);
@@ -89,7 +127,7 @@ public class ActionSpace {
                 String d = ps.getDriverOrder().get(r);
                 driver.set(r, true);
                 return new Action(ActionType.CHANGE_DRIVER, d);
-            case 3:
+            case 5:
                 r = rand.nextInt(n_tires);
                 while (tire_type.get(r)) {
                     r = rand.nextInt(n_tires);
@@ -97,10 +135,10 @@ public class ActionSpace {
                 Tire t = ps.getTireOrder().get(r);
                 tire_type.set(r, true);
                 return new Action(ActionType.CHANGE_TIRES, t);
-            case 4:
+            case 6:
                 fuel = true;
                 return new Action(ActionType.ADD_FUEL, 10);
-            case 5:
+            case 7:
                 r = rand.nextInt(3);
                 while (pressure.get(r)) {
                     r = rand.nextInt(3);

@@ -35,7 +35,7 @@ public class Simulate {
     public Node next(Node currentNode, Action a) throws IllegalArgumentException {
 
         Node nextNode;
-        this.currentNode = currentNode;
+        this.currentNode = currentNode.copyNode();
 
         if (!actionValidForLevel(a)) {
             throw new IllegalArgumentException("ActionType A"
@@ -81,9 +81,7 @@ public class Simulate {
             steps += ps.getRepairTime() - 1;
             nextNode = nextNode.changeBreakdownCondition(false);
         }
-
         steps += 1;
-        currentNode = nextNode.copyNode();
 
         return nextNode;
     }
@@ -131,7 +129,6 @@ public class Simulate {
             nextNode = nextNode.consumeFuel(fuelRequired);
         }
 
-        nextNode.setStep(currentNode.getStep() + 1);
         return nextNode;
     }
 

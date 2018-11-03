@@ -11,15 +11,15 @@ public class Node {
     private ArrayList<Node> children = new ArrayList();
     private ProblemSpec state;
     private boolean explored = false;
-    private int action;
     private ArrayList<Double> scores;
     public boolean isStart = false;
     private Random rand = new Random();
-    private ArrayList<Integer> actionList;
     private ActionSpace actionSpace;
     private double explore_param = Math.sqrt(2);
     private ProblemSpec ps;
     private int step;
+    private double UCB1;
+    private Action action;
 
     /** The position of the car in terms of grid cell in environment **/
     private int pos;
@@ -40,7 +40,7 @@ public class Node {
 
     public ArrayList<Node> getChildren() { return children; }
 
-    public void setAction(int action) {
+    public void setAction(Action action) {
         this.action = action;
     }
 
@@ -58,7 +58,7 @@ public class Node {
         this.explored = true;
     }
 
-    public int getAction() {
+    public Action getAction() {
         return this.action;
     }
 
@@ -66,11 +66,21 @@ public class Node {
 
     // UCB1 function
     public double getScore() {
-        return mean(this.scores) + explore_param * Math.sqrt(Math.log(parent.getVisits())/this.getVisits());
+        return UCB1;
+    }
+
+    // Calculate the explore/exploit score. Handle the case where start parent does not have many tries.
+    private void computeUCB1() {
+        if (parent.getVisits() > 1) {
+            UCB1 = mean(this.scores) + explore_param * Math.sqrt(Math.log(parent.getVisits()) / this.getVisits());
+        } else {
+            UCB1 = mean(this.scores) + explore_param * Math.sqrt(Math.log(2) / this.getVisits());
+        }
     }
 
     public void newScore(double score) {
         this.scores.add(score);
+        if(!isStart) { computeUCB1(); }
     }
 
     public int getVisits() {
@@ -118,7 +128,7 @@ public class Node {
         this.tirePressure = tirePressure;
         this.driver = driver;
         this.tireModel = tireModel;
-        this.actionSpace = new ActionSpace(ps);
+        this.actionSpace = new ActionSpace(ps, this);
         scores = new ArrayList();
         this.ps = ps;
         this.step = step;
@@ -309,6 +319,7 @@ public class Node {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
+        sb.append("Score=").append(UCB1).append(" | ");
         sb.append("Node: [ ");
         sb.append("Pos=").append(pos).append(" | ");
         sb.append("Car=").append(carType).append(" | ");
