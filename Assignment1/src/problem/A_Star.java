@@ -55,10 +55,8 @@ public class A_Star {
             else{
                 ArrayList<Vertex> children = getChildren(current);
                 Heuristic(children);
-                if(children.isEmpty()) {
-                    explored.add(current);
-                    continue;
-                } else {
+                explored.add(current);
+                if(!children.isEmpty()) {
                     // only add if not yet explored
                     for (Vertex child : children) {
                         boolean done = false;

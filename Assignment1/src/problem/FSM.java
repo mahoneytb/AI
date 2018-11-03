@@ -34,7 +34,7 @@ public class FSM {
     private Pathway complete_path = new Pathway();
     boolean advanced = false;
     private ArrayList<RobotConfig> robotGoals;
-    Random generator = new Random(SEED);
+    Random generator = new Random();//SEED);
 
     // FSM states
     private static int START = 0;
@@ -83,20 +83,12 @@ public class FSM {
     }
 
     // While loop which chews through states
-    public boolean solve() {
+    public boolean solve(String filename) {
         while (!goal_state) {
             ExecuteState(current);
         }
-        complete_path.createSolutionFile();
+        complete_path.createSolutionFile(filename);
         ps.reset();
-        try {
-            ps.loadSolution("solution.txt");
-            tester.testSolution();
-
-        } catch (IOException e1) {
-            System.out.println("FAILED: Invalid problem file");
-            System.out.println(e1.getMessage());
-        }
         System.out.println("COMPLETED GOAL");
         return true;
     }
@@ -192,7 +184,7 @@ public class FSM {
             current = BOX_SAMPLE;
             return;
         }
-        if (!advanced || (robotCollisionSet.size()<4)) {
+        if (!advanced || (robotCollisionSet.size()<20)) {
             if (robotGoals.isEmpty()) {
                 resetRobotSampler();
                 current_box = findClosest(ps.getMovingBoxes(), robot.getPos(), true);
@@ -200,7 +192,7 @@ public class FSM {
                 return;
             }
             robotSample(robot, robotGoals);
-            if (robotAttempt > 0) {
+            if (robotAttempt > 3) {
                 advanced = true;
             }
         } else {
@@ -258,7 +250,7 @@ public class FSM {
     // Find closest box to robot
     private int findClosest(List<Box> boxes, Point2D pos, boolean notCurrent) {
         double shortest = 10;
-        int index = 0;
+        int index = -1;
         // Check each box
         for (int i = 0; i < boxes.size(); i++) {
             Box b = boxes.get(i);
@@ -277,6 +269,9 @@ public class FSM {
                     shortest = d;
                 }
             }
+        }
+        if (index == -1) {
+            return current_box;
         }
         System.out.println("Trying box: " + index);
         return index;
@@ -422,19 +417,17 @@ public class FSM {
         }
 
         // Add current position
-        if ((xb != 0) && (yb != 0)) {
-            Vertex vb = new Vertex(new Point2D.Double(xb, yb));
-            findNeighbours(vb, newGrid, grade);
-            newGrid.add(vb);
-        }
+        Vertex vb = new Vertex(new Point2D.Double(round(b.getPos().getX(), 6),
+                round(b.getPos().getY(), 6)));
+        findNeighbours(vb, newGrid, grade);
+        newGrid.add(vb);
 
         // Add goal position
         if (isBox && (idx == current_box)) {
-            if ((xg != 0) && (yg != 0)) {
-                Vertex vg = new Vertex(new Point2D.Double(xg, yg));
-                findNeighbours(vg, newGrid, grade);
-                newGrid.add(vg);
-            }
+            Vertex vg = new Vertex(new Point2D.Double(round(ps.getMovingBoxEndPositions().get(idx).getX(), 6),
+                    round(ps.getMovingBoxEndPositions().get(idx).getY(), 6)));
+            findNeighbours(vg, newGrid, grade);
+            newGrid.add(vg);
         }
         return newGrid;
     }
@@ -707,7 +700,7 @@ public class FSM {
         if (goals.size() > 1) { g = goals.get(1); } // The middle goal
         else g = goals.get(0);
         // Get bounds for probable samples: 0.1 outside of current max and min positions
-        double BOUND = 0.1 * (robotAttempt);
+        double BOUND = 0.2 * (robotAttempt);
         double xmax = (r.getPos().getX() > g.getPos().getX()) ? r.getPos().getX() : g.getPos().getX();
         xmax = ((xmax + BOUND) > 1) ? 1 : (xmax + BOUND);
         double xmin = (r.getPos().getX() > g.getPos().getX()) ? g.getPos().getX() : r.getPos().getX();
@@ -718,8 +711,8 @@ public class FSM {
         double ymin = (r.getPos().getY() > g.getPos().getY()) ? g.getPos().getY() : r.getPos().getY();
         ymin = ((ymin - BOUND) < 0) ? 0 : (ymin - BOUND);
 
-        double alphamax = (r.getOrientation() > g.getOrientation()) ? r.getOrientation() : g.getOrientation();
-        double alphamin = (r.getOrientation() > g.getOrientation()) ? g.getOrientation() : r.getOrientation();
+        //double alphamax = (r.getOrientation() > g.getOrientation()) ? r.getOrientation() : g.getOrientation();
+        //double alphamin = (r.getOrientation() > g.getOrientation()) ? g.getOrientation() : r.getOrientation();
 
         ArrayList<Box> newBoxConfig = new ArrayList<>();
         newBoxConfig.addAll(ps.getMovingBoxes());
@@ -727,22 +720,22 @@ public class FSM {
 
         // Sample 100 times with 70% chance of forcing being between the robot current position and the goal
         int n = 0;
-        while (n<50) {
+        while (n<40) {
             double x, y, alpha;
             // 70% we choose a point in the start to goal area
             if (generator.nextDouble() > 0.3) {
                 x = generator.nextDouble() * (xmax - xmin) + xmin;
                 y = generator.nextDouble() * (ymax - ymin) + ymin;
-                alpha = generator.nextDouble() * (alphamax - alphamin) + alphamin;
+                //alpha = generator.nextDouble() * (alphamax - alphamin) + alphamin;
                 // Introduce opposite robot orientations
-                alpha += (generator.nextDouble() > 0.5) ? Math.PI : 0;
-                alpha -= (alpha > (Math.PI * 2)) ? Math.PI * 2 : 0;
+                //alpha += (generator.nextDouble() > 0.5) ? Math.PI : 0;
+                //alpha -= (alpha > (Math.PI * 2)) ? Math.PI * 2 : 0;
             } else {
                 x = generator.nextDouble();
                 y = generator.nextDouble();
-                alpha = generator.nextDouble();
+                //alpha = generator.nextDouble();
             }
-            //alpha = generator.nextDouble()*Math.PI*2; // Keep alpha random
+            alpha = generator.nextDouble()*Math.PI*2; // Keep alpha random
             RobotConfig s = new RobotConfig(new Point2D.Double(x, y), alpha);
 
             // Check for collisions
@@ -796,13 +789,20 @@ public class FSM {
 
         // Sample 100 times with 70% chance of forcing being between the robot current position and the goal
         int n = 0;
-        while (n<50) {
+        int count = 0;
+        double BUFFER = 0.05;
+        ArrayList<RobotConfig> newCollisions = new ArrayList<>();
+        while (n<40) {
+            // if we aren't finding many new points increase search area
+            if (count > 200) {
+                BUFFER += 0.05;
+            }
             double x, y, alpha;
             RobotConfig c = robotCollisionSet.get(generator.nextInt(robotCollisionSet.size()-1));
-            double xmax = (c.getPos().getX() + 0.05 < 1) ? c.getPos().getX() - 0.05 : 1;
-            double xmin = (xmax - 0.1 > 0) ? xmax - 0.1 : 0;
-            double ymax = (c.getPos().getY() + 0.05 < 1) ? c.getPos().getX() - 0.05 : 1;
-            double ymin = (xmax - 0.1 > 0) ? xmax - 0.1 : 0;
+            double xmax = (c.getPos().getX() + BUFFER < 1) ? c.getPos().getX() - BUFFER : 1;
+            double xmin = (xmax - BUFFER > 0) ? xmax - BUFFER : 0;
+            double ymax = (c.getPos().getY() + BUFFER < 1) ? c.getPos().getX() - BUFFER : 1;
+            double ymin = (xmax - BUFFER > 0) ? xmax - BUFFER : 0;
 
             x = generator.nextDouble()*(xmax - xmin) + xmin;
             y = generator.nextDouble()*(ymax - ymin) + ymin;
@@ -816,7 +816,8 @@ public class FSM {
 
             // Check for collisions
             if (!tester.hasCollision(s, newBoxConfig, false)) {
-                robotCollisionSet.add(s);
+                count ++;
+                newCollisions.add(s);
                 continue;
             }
 
@@ -829,6 +830,7 @@ public class FSM {
             robot_samples.add(s);
             robot_samples.add(s2);
         }
+        robotCollisionSet.addAll(newCollisions);
         return;
     }
 
@@ -1090,7 +1092,7 @@ public class FSM {
             for (int i = 0; i < n_boxes; i++) {
                 Box b = ps.getMovingBoxes().get(i);
                 b.include = true;
-                if (!found && !tried.contains(b) && !recheckBoxPath()) {
+                if (!found && i != current_box && !tried.contains(b) && !recheckBoxPath()) {
                     found = true;
                     obstruction = b;
                     if (!b.getPos().equals(ps.getMovingBoxEndPositions().get(i))) {
@@ -1110,6 +1112,7 @@ public class FSM {
                 b.include = true;
                 if (!found && !tried.contains(b) && !recheckBoxPath()) {
                     obstruction = b;
+                    found = true;
                 }
             }
             // We have found a box in the way and are yet to attempt to take it to goal, skip the rest and return to try
@@ -1121,15 +1124,16 @@ public class FSM {
             }
 
             // Attempt to move box to goal position (g = no longer an obstruction for current box)
-            if (moveObstruction(obstruction)) { tried.clear(); }
+            if (moveObstruction(obstruction)) {
+                System.out.println("Obstruction moved");
+                tried.clear();
+            }
             // If move attempt fails we try another obstruction
             else { tried.add(obstruction); }
 
             constructGrids();
             BoxToGrid(ps.getMovingBoxes().get(current_box), current_grade);
-
-            if (recheckBoxPath()) { allClear = true; }
-        }
+            if (recheckBoxPath()) { allClear = true; } }
         // Try next box
         current_box = findClosest(ps.getMovingBoxes(), robot.getPos(), true);
         return current_box;
@@ -1143,7 +1147,7 @@ public class FSM {
 
         // Assert bi-directional connections
         populateNeighbours(grid);
-        // Second to last element is initial position --See BoxToGrid
+        // Last element is initial position --See BoxToGrid
         Vertex start = grid.get(grid.size()-1);
 
         // **************************************** BFS ************************************************
@@ -1199,13 +1203,13 @@ public class FSM {
                 Rgoals = getRobotGoalPositions(grid_corners.get(grid_corners.size()-1), obstruction);
                 robot_samples.clear();
             }
-            if (!advanced || (robotCollisionSet.size()<4)) {
+            if (!advanced || (robotCollisionSet.size()<20)) {
                 if (Rgoals.isEmpty()) {
                     resetRobotSampler();
                     return false;
                 }
                 robotSample(robot, Rgoals);
-                if (robotAttempt > 0) {
+                if (robotAttempt > 1) {
                     advanced = true;
                 }
             } else {
@@ -1224,6 +1228,7 @@ public class FSM {
                 robotAttempt += 1;
             }
         }
+        resetRobotSampler();
         System.out.println("Could not solve robot to goal");
         return false;
     }

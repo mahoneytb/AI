@@ -35,9 +35,9 @@ public class Pathway {
         pathway.add(move);
     }
 
-    public void createSolutionFile() {
+    public void createSolutionFile(String filename) {
         try {
-            PrintWriter writer = new PrintWriter("solution.txt", StandardCharsets.UTF_8);
+            PrintWriter writer = new PrintWriter(filename, StandardCharsets.UTF_8);
             writer.println(pathway.size());
             writer.flush();
             for (ArrayList<Double> line : pathway) {

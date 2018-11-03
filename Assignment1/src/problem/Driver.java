@@ -6,12 +6,14 @@ import visualiser.Visualiser;
 
 public class Driver {
 
-    private Tester tester;
-
     public static void main(String[] args) {
 
         long startTime = System.nanoTime();
         ProblemSpec ps = new ProblemSpec();
+        if (args.length < 2) {
+            System.out.println("Not enough input arguments");
+            return;
+        }
         try {
             ps.loadProblem(args[0]);
         } catch (IOException e1) {
@@ -21,14 +23,19 @@ public class Driver {
 
         FSM query = new FSM();
         query.loadProblem(ps);
-        if (query.solve()) {
+        if (query.solve(args[1])) {
         }
         long endTime   = System.nanoTime();
         long totalTime = endTime - startTime;
         System.out.println("Runtime: " + totalTime/1000000000 + " seconds");
-    }
+        Tester tester = new Tester(ps);
+        try {
+            ps.loadSolution("solution.txt");
+            tester.testSolution();
 
-    private void createTester(ProblemSpec ps) {
-        tester = new Tester(ps);
+        } catch (IOException e1) {
+            System.out.println("FAILED: Invalid problem file");
+            System.out.println(e1.getMessage());
+        }
     }
 }

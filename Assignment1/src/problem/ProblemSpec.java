@@ -257,8 +257,8 @@ public class ProblemSpec {
     		b.pos = movingBoxesStartPositions.get(i);
 		}
 		for (int i = 0; i < numMovingObstacles; i++) {
-			Box b = getMovingBoxes().get(i);
-			b.pos = movingBoxesStartPositions.get(i);
+			Box b = getMovingObstacles().get(i);
+			b.pos = movingObstaclesStartPositions.get(i);
 		}
 	}
 }

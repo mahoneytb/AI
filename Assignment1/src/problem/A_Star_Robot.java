@@ -52,10 +52,8 @@ public class A_Star_Robot {
             else{
                 ArrayList<RobotConfig> children = getChildren(current);
                 Heuristic(children, current);
-                if(children.isEmpty()) {
-                    explored.add(current);
-                    continue;
-                } else {
+                explored.add(current);
+                if(!children.isEmpty()) {
                     // only add if not yet explored
                     for (RobotConfig child : children) {
                         boolean done = false;
