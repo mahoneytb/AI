@@ -36,6 +36,7 @@ public class Simulate {
 
         Node nextNode;
         this.currentNode = currentNode.copyNode();
+        this.steps = currentNode.getStep();
 
         if (!actionValidForLevel(a)) {
             throw new IllegalArgumentException("ActionType A"
@@ -82,7 +83,8 @@ public class Simulate {
             nextNode = nextNode.changeBreakdownCondition(false);
         }
         steps += 1;
-
+        nextNode.setStep(steps);
+        nextNode.setAction(a);
         return nextNode;
     }
 

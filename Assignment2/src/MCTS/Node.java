@@ -11,7 +11,6 @@ public class Node {
     private ArrayList<Node> children = new ArrayList();
     private ProblemSpec state;
     private boolean explored = false;
-    private ArrayList<Double> scores;
     public boolean isStart = false;
     private Random rand = new Random();
     private ActionSpace actionSpace;
@@ -20,6 +19,9 @@ public class Node {
     private int step;
     private double UCB1;
     private Action action;
+    private static double epsilon = 0;
+    double mean = 0;
+    double visits = 0;
 
     /** The position of the car in terms of grid cell in environment **/
     private int pos;
@@ -42,6 +44,7 @@ public class Node {
 
     public void setAction(Action action) {
         this.action = action;
+        createActionSpace();
     }
 
     public void addParent(Node parent) {
@@ -62,45 +65,35 @@ public class Node {
         return this.action;
     }
 
-    public double getLastScore() { return scores.get(scores.size()-1); }
-
     // UCB1 function
     public double getScore() {
         return UCB1;
     }
 
     // Calculate the explore/exploit score. Handle the case where start parent does not have many tries.
-    private void computeUCB1() {
-        if (parent.getVisits() > 1) {
-            UCB1 = mean(this.scores) + explore_param * Math.sqrt(Math.log(parent.getVisits()) / this.getVisits());
-        } else {
-            UCB1 = mean(this.scores) + explore_param * Math.sqrt(Math.log(2) / this.getVisits());
-        }
+    public void computeUCB1(double epsilon) {
+        UCB1 = mean + explore_param * Math.sqrt(Math.log(parent.getVisits()) /
+                (visits+rand.nextDouble())) + rand.nextDouble()*epsilon;
     }
 
     public void newScore(double score) {
-        this.scores.add(score);
-        if(!isStart) { computeUCB1(); }
+        mean = mean*(visits/(visits+1)) + score/(visits+1);
+        visits++;
     }
 
-    public int getVisits() {
-        return scores.size();
+    public double getMean() { return mean; }
+
+    public double getVisits() {
+        return visits;
     }
 
     public Action getNextUnexpanded() {
         return actionSpace.getNextUnexploredAction();
     }
 
-    private double mean(ArrayList<Double> n_list) {
-        int sum = 0;
-        for (double n : n_list) {
-            sum += n;
-        }
-        return sum/n_list.size();
-    }
-
     public void setStep(int step) { this.step = step; }
     public int getStep() { return step; }
+    public void createActionSpace() { this.actionSpace = new ActionSpace(ps, this); }
 
 
     //*****************************************from State for Simulate***********************************************
@@ -128,8 +121,6 @@ public class Node {
         this.tirePressure = tirePressure;
         this.driver = driver;
         this.tireModel = tireModel;
-        this.actionSpace = new ActionSpace(ps, this);
-        scores = new ArrayList();
         this.ps = ps;
         this.step = step;
     }
@@ -312,14 +303,25 @@ public class Node {
      * @return deep copy of current state
      */
     public Node copyNode() {
-        return new Node(pos, slip, breakdown, carType, fuel, tirePressure, driver,
+        Node copy =  new Node(pos, slip, breakdown, carType, fuel, tirePressure, driver,
                 tireModel, ps, step);
+        copy.setMean(mean);
+        for (Node c : children) { copy.addChild(c); }
+        copy.addParent(parent);
+        copy.setAction(action);
+        return copy;
+    }
+
+    public void setMean(double val) {
+        this.mean = val;
     }
 
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append("Score=").append(UCB1).append(" | ");
+        sb.append("USB1=").append(UCB1).append(" | ");
+        sb.append("Mean=").append(mean).append(" | ");
+        sb.append("Action=").append(action.getText()).append(" | ");
         sb.append("Node: [ ");
         sb.append("Pos=").append(pos).append(" | ");
         sb.append("Car=").append(carType).append(" | ");

@@ -49,7 +49,7 @@ public class ProblemSpec {
      * environment map */
     private LinkedHashMap<Terrain, List<Integer>> terrainMap;
     /** Ordering of terrain as they appear in input **/
-    private List<Terrain> terrainOrder;
+    public List<Terrain> terrainOrder;
     /** Number of car types **/
     private int CT;
     /** Car probability mapping **/

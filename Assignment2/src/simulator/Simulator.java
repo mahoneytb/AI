@@ -20,7 +20,7 @@ public class Simulator {
     private int steps;
     /** Whether to print progress messages or not
      * Feel free to change this if you don't want messages printed **/
-    private boolean verbose = false;
+    private boolean verbose = true;
     /** A container to store steps for output **/
     private List<Step> stepRecord;
     /** path and name for output file **/

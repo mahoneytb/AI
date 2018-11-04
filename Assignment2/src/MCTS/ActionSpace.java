@@ -22,6 +22,8 @@ public class ActionSpace {
     private ArrayList<Integer> set_pressures;
 
     public ActionSpace(ProblemSpec ps, Node node) {
+
+
         this.ps = ps;
         car_type = new ArrayList();
         driver = new ArrayList();
@@ -33,7 +35,7 @@ public class ActionSpace {
         n_tires = ps.getTireOrder().size();
 
         move = false;
-        fuel = false;
+        fuel = (ps.getLevel().isValidActionForLevel(ActionType.ADD_FUEL) && node.getFuel() < 30) ? false : true;
         ActionType previous;
         if (node.getAction() != null) {
             previous = node.getAction().getActionType();
@@ -72,7 +74,7 @@ public class ActionSpace {
         set_pressures.add(75);
         set_pressures.add(100);
 
-        if (previous != ActionType.CHANGE_PRESSURE) {
+        if (ps.getLevel().isValidActionForLevel(ActionType.ADD_FUEL) && previous != ActionType.CHANGE_PRESSURE) {
             for (int p = 0; p < 3; p++) {
                 if (!set_pressures.get(p).equals(node.getTirePressure())) {
                     pressure.add(false);
@@ -92,8 +94,8 @@ public class ActionSpace {
         if (car_type.contains(false))   { actions.add(3); }
         if (driver.contains(false))     { actions.add(4); }
         if (tire_type.contains(false))  { actions.add(5); }
-        if (!fuel)                      { actions.add(6); }
-        if (pressure.contains(false))   { actions.add(7); }
+        //if (!fuel)                      { actions.add(6); }
+        if (pressure.contains(false))   { actions.add(6); }
         if (actions.isEmpty()) {
             return null;
         }
@@ -135,10 +137,10 @@ public class ActionSpace {
                 Tire t = ps.getTireOrder().get(r);
                 tire_type.set(r, true);
                 return new Action(ActionType.CHANGE_TIRES, t);
-            case 6:
+            /*case 6:
                 fuel = true;
-                return new Action(ActionType.ADD_FUEL, 10);
-            case 7:
+                return new Action(ActionType.ADD_FUEL, 9); */
+            case 6:
                 r = rand.nextInt(3);
                 while (pressure.get(r)) {
                     r = rand.nextInt(3);
@@ -148,6 +150,7 @@ public class ActionSpace {
                 if (r==0) { return new Action(ActionType.CHANGE_PRESSURE, TirePressure.FIFTY_PERCENT); }
                 if (r==1) { return new Action(ActionType.CHANGE_PRESSURE, TirePressure.SEVENTY_FIVE_PERCENT); }
                 if (r==2) { return new Action(ActionType.CHANGE_PRESSURE, TirePressure.ONE_HUNDRED_PERCENT); }
+                return new Action(ActionType.CHANGE_PRESSURE, TirePressure.FIFTY_PERCENT);
         }
         return null;
     }
