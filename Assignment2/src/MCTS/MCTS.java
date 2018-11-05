@@ -19,9 +19,8 @@ public class MCTS {
     private static int UPDATE = 3;
     private Random rand = new Random();
     private Simulate simulator;
-    private int iterations = 0;
     private static double epsilon = 1e-6;
-    private boolean firstNodesComplete = false;
+    private boolean setupComplete = false;
     private double scoreCarry;
 
     // Initial state
@@ -69,7 +68,7 @@ public class MCTS {
         // Iterate for 14 seconds
         long start = System.nanoTime();
         long current = System.nanoTime();
-        while (current - start < 13*1e9) {
+        while (current - start < 13*1e9) { //13
             ExecuteState(FSM);
             if (FSM == SELECTION) { current = System.nanoTime(); }
         }
@@ -95,7 +94,7 @@ public class MCTS {
             for (Node child : current_node.getChildren()) {
                 child.computeUCB1(epsilon);
             }
-            firstNodesComplete = true;
+            setupComplete = true;
             FSM = SELECTION;
             return;
         }
@@ -110,6 +109,7 @@ public class MCTS {
         while(current_action == null) {
             Node best_child = current_node.getChildren().get(0);
             for(Node child : current_node.getChildren()) {
+                child.computeUCB1(0);
                 double s = best_child.getScore();
                 if (child.getScore() > s | Double.isNaN(s)) {
                     best_child = child;
@@ -118,6 +118,8 @@ public class MCTS {
             current_node = best_child;
             current_action = current_node.getNextUnexpanded();
         }
+        //current_node = bestUCT();
+        //current_action = current_node.getNextUnexpanded();
         FSM = EXPANSION_SIMULATION;
     }
 
@@ -148,7 +150,7 @@ public class MCTS {
     // Update scores of states in tree
     private void UPDATE() {
         // Give this score to all the parents to backprop
-        if(firstNodesComplete) {
+        if(setupComplete) {
             while(!current_node.isStart) {
                 current_node.computeUCB1(0);
                 current_node = current_node.getParent();
@@ -161,8 +163,7 @@ public class MCTS {
                 current_node.newScore(scoreCarry);
             }
         }
-        FSM = (firstNodesComplete) ? SELECTION : SETUP;
-        iterations += (firstNodesComplete) ? 1 : 0;
+        FSM = (setupComplete) ? SELECTION : SETUP;
     }
 
     private Node simNextNode(Node node, Action action) {
