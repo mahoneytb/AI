@@ -25,9 +25,17 @@ public class Main {
                 System.out.println(ps.toString());
                 MCTS MCTS = new MCTS(ps, testSimulator);
 
-
+                int counter = 0;
                 while (simulator.getSteps() <= ps.getMaxT()) {
                     Action action = MCTS.run();
+                    // force action every 4 without
+                    if (action.getActionType() == ActionType.MOVE) { counter = 0; }
+                    else { counter++; }
+                    if (counter>3) {
+                        action = new Action(ActionType.MOVE);
+                        counter = 0;
+                    }
+
                     State nextState = simulator.step(action);
                     MCTS = new MCTS(ps, testSimulator, nextState, simulator.getSteps(), action);
                     if (nextState.getPos() >= ps.getN()) {
