@@ -3,10 +3,7 @@ package MCTS;
 import problem.*;
 import simulator.*;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Random;
 
 public class MCTS {
 
@@ -17,11 +14,11 @@ public class MCTS {
     private static int SELECTION = 1;
     private static int EXPANSION_SIMULATION = 2;
     private static int UPDATE = 3;
-    private Random rand = new Random();
     private Simulate simulator;
     private static double epsilon = 1e-6;
     private boolean setupComplete = false;
     private double scoreCarry;
+    private double totalVisits = 0;
 
     // Initial state
     private int FSM;
@@ -31,6 +28,7 @@ public class MCTS {
         void ExecuteState();
     }
 
+    // State functions
     private ExecuteStateAction[] States = new ExecuteStateAction[] {
             new ExecuteStateAction() { public void ExecuteState() { SETUP(); } },
             new ExecuteStateAction() { public void ExecuteState() { SELECTION(); } },
@@ -42,6 +40,7 @@ public class MCTS {
         States[index].ExecuteState();
     }
 
+    // MCTS start initial
     public MCTS(ProblemSpec ps, Simulate simulator) {
         this.ps = ps;
         current_node = new Node(1, false, false, ps.getFirstCarType(), ProblemSpec.FUEL_MAX,
@@ -52,6 +51,7 @@ public class MCTS {
         FSM = SETUP;
     }
 
+    // MCTS continue initial
     public MCTS(ProblemSpec ps, Simulate simulator, State state, int steps, Action topAction) {
         this.ps = ps;
         current_node = new Node(state.getPos(), state.isInSlipCondition(), state.isInBreakdownCondition(),
@@ -68,7 +68,8 @@ public class MCTS {
         // Iterate for 14 seconds
         long start = System.nanoTime();
         long current = System.nanoTime();
-        while (current - start < 13*1e9) { //13
+        // Run MCTS for 13 seconds
+        while (current - start < 13*1e9) {
             ExecuteState(FSM);
             if (FSM == SELECTION) { current = System.nanoTime(); }
         }
@@ -87,12 +88,13 @@ public class MCTS {
         return best_action;
     }
 
+    // Populate the first action nodes
     private void SETUP() {
         current_action = current_node.getNextUnexpanded();
         // if every action has been explored, pick the best scoring next
         if(current_action == null) {
             for (Node child : current_node.getChildren()) {
-                child.computeUCB1(epsilon);
+                child.computeUCB1(epsilon, totalVisits);
             }
             setupComplete = true;
             FSM = SELECTION;
@@ -109,7 +111,7 @@ public class MCTS {
         while(current_action == null) {
             Node best_child = current_node.getChildren().get(0);
             for(Node child : current_node.getChildren()) {
-                child.computeUCB1(0);
+                child.computeUCB1(0, totalVisits);
                 double s = best_child.getScore();
                 if (child.getScore() > s | Double.isNaN(s)) {
                     best_child = child;
@@ -118,8 +120,6 @@ public class MCTS {
             current_node = best_child;
             current_action = current_node.getNextUnexpanded();
         }
-        //current_node = bestUCT();
-        //current_action = current_node.getNextUnexpanded();
         FSM = EXPANSION_SIMULATION;
     }
 
@@ -130,18 +130,13 @@ public class MCTS {
         current_node.addChild(nextNode);
         nextNode.setAction(current_action);
 
-        // from here we do not save the computed nodes to save space
-        boolean win = false;
-        while (!win & nextNode.getStep() < ps.getMaxT()) {
-            current_action = nextNode.getNextUnexpanded();
-            nextNode = simNextNode(nextNode, current_action);
-            nextNode.setAction(current_action);
-            win = nextNode.getPos() >= ps.getN();// (current_node.getPos() + ps.getN());
-        }
-        // Get the node back (we lost it above through the iterations)
+        // perform heavy rollout
+        double win = rollout(nextNode);
+
+        // Get the node back (we lost it above through the selection iterations)
         current_node = current_node.getChildren().get(current_node.getChildren().size()-1);
-        // Its score is the max time allowed minus the time it too to win
-        scoreCarry = (win) ? 1 : 0;
+        // Its score is the max time allowed minus the time it took to win
+        scoreCarry = win;
         // Update the current expanding node mean here
         current_node.newScore(scoreCarry);
         FSM = UPDATE;
@@ -149,14 +144,16 @@ public class MCTS {
 
     // Update scores of states in tree
     private void UPDATE() {
+        totalVisits++;
         // Give this score to all the parents to backprop
         if(setupComplete) {
             while(!current_node.isStart) {
-                current_node.computeUCB1(0);
+                current_node.computeUCB1(0, totalVisits);
                 current_node = current_node.getParent();
                 current_node.newScore(scoreCarry);
             }
         }
+        // Don't update if we haven't populated the first actions yet
         else {
             while (!current_node.isStart) {
                 current_node = current_node.getParent();
@@ -166,9 +163,11 @@ public class MCTS {
         FSM = (setupComplete) ? SELECTION : SETUP;
     }
 
+    // Return the next node given current node and action
     private Node simNextNode(Node node, Action action) {
         if (action.getActionType() != ActionType.MOVE) { return simulator.next(node, action); }
 
+        // If the action is a movement, return the most frequently occurring next state
         HashMap<Node, Integer> hmap = new HashMap<Node, Integer>();
         for (int i=0; i<20; i++) {
             Node sample = simulator.next(node, action);
@@ -186,6 +185,7 @@ public class MCTS {
         return mostNode;
     }
 
+    // Include new states in hmap, if not new increase count
     private void updateHash(HashMap<Node, Integer> hmap, Node node) {
         for (Node n : hmap.keySet()) {
             if (n.getPos() == node.getPos() &
@@ -252,11 +252,14 @@ public class MCTS {
                 }
                 child = bestChild(child);
             }
-            return node.getAction();
+            Action plusFuel = new Action(ActionType.CHANGE_TIRE_FUEL_PRESSURE, node.getTireModel(), 9,
+                    node.getTirePressure());
+            return plusFuel;//node.getAction();
         }
         return null;
     }
 
+    // Return the child of node with the best score
     private Node bestChild(Node node) {
         Node bestChild = node.getChildren().get(0);
         double bestScore = 0;
@@ -267,5 +270,61 @@ public class MCTS {
             }
         }
         return bestChild;
+    }
+
+    // Heavy playout
+    private double rollout(Node nextNode) {
+        double win = 0;
+        Action action = nextNode.getAction();
+        double steps = 0;
+
+        // We only allow the occurance of one of each of the following actions during rollout
+        boolean car = action.getActionType() == ActionType.CHANGE_CAR;
+        boolean tire = action.getActionType() == ActionType.CHANGE_TIRES;
+        boolean press = action.getActionType() == ActionType.CHANGE_PRESSURE;
+        boolean driver = action.getActionType() == ActionType.CHANGE_DRIVER;
+
+        while (win==0.0 && nextNode.getStep() < ps.getMaxT()) {
+            current_action = nextNode.getNextUnexpanded();
+            steps++;
+            boolean isValid = false;
+            // Check the validity of the action
+            while (!isValid) {
+                // Quit if movement
+                if (current_action.getActionType() == ActionType.MOVE) {
+                    break;
+                }
+                // If we've seen the action before in this rollout, try another action
+                if ((car && (current_action.getActionType() == ActionType.CHANGE_CAR)) ||
+                        tire && (current_action.getActionType() == ActionType.CHANGE_TIRES) ||
+                        press && (current_action.getActionType() == ActionType.CHANGE_PRESSURE) ||
+                        driver && (current_action.getActionType() == ActionType.CHANGE_DRIVER)) {
+                    current_action = nextNode.getNextUnexpanded();
+                } else if (current_action.getActionType() == ActionType.CHANGE_CAR) {
+                    car = true;
+                    isValid = true;
+                } else if (current_action.getActionType() == ActionType.CHANGE_TIRES) {
+                    tire = true;
+                    isValid = true;
+                } else if (current_action.getActionType() == ActionType.CHANGE_PRESSURE) {
+                    press = true;
+                    isValid = true;
+                } else if (current_action.getActionType() == ActionType.CHANGE_DRIVER) {
+                    driver = true;
+                    isValid = true;
+                } else {
+                    // We should never get here
+                    System.out.println("How tho");
+                }
+            }
+            // Prepare for next rollout level
+            nextNode = simNextNode(nextNode, current_action);
+            nextNode.setAction(current_action);
+            // Compute the score
+            win = (1.0*nextNode.getPos() - 1.0*current_node.getPos())/steps;
+            // If
+            if (current_action.getActionType()==ActionType.MOVE) { return win; }
+        }
+        return win;
     }
 }

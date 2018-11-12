@@ -85,6 +85,7 @@ public class Simulate {
         steps += 1;
         nextNode.setStep(steps);
         nextNode.setAction(a);
+        nextNode.removeChildren();
         return nextNode;
     }
 

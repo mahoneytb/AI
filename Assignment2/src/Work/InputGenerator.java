@@ -19,13 +19,13 @@ public class InputGenerator {
         }
     }
     private static void InputStructure(int lv) throws IOException {
-        String inputFile= "examples/level_" + lv + "/input_lvl" + lv + ".txt";
+        String inputFile= "examples/level_" + lv + "/input_lvl" + lv + "_1.txt";
         ProblemSpec ps = new ProblemSpec(inputFile);
         getInputFormat(ps);
         //number of input files generate
 
         for (int num = 0; num< num_file; num++) {
-            String newInputFile =  "examples/level_" + lv + "/input_lvl" + lv + "_"+num+".txt";
+            String newInputFile =  "examples/level_" + lv + "/input_lvl_double" + lv + "_"+num+".txt";
             BufferedWriter input = new BufferedWriter(new FileWriter(newInputFile));
             input.write(getInputFormat(ps));
             input.close();

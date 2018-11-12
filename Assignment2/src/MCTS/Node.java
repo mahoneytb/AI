@@ -14,7 +14,7 @@ public class Node {
     public boolean isStart = false;
     private Random rand = new Random();
     private ActionSpace actionSpace;
-    private double explore_param = Math.sqrt(2);
+    private double explore_param = 1;//Math.sqrt(2);
     private ProblemSpec ps;
     private int step;
     private double UCB1;
@@ -71,8 +71,8 @@ public class Node {
     }
 
     // Calculate the explore/exploit score. Handle the case where start parent does not have many tries.
-    public void computeUCB1(double epsilon) {
-        UCB1 = mean + explore_param * Math.sqrt(Math.log(parent.getVisits()) /
+    public void computeUCB1(double epsilon, double totalVisits) {
+        UCB1 = mean + explore_param * Math.sqrt(2*Math.log(totalVisits) / //parent.getVisits()) /
                 (visits+rand.nextDouble())) + rand.nextDouble()*epsilon;
     }
 
@@ -82,6 +82,8 @@ public class Node {
     }
 
     public double getMean() { return mean; }
+
+    public void removeChildren() { this.children.clear(); }
 
     public double getVisits() {
         return visits;
@@ -321,6 +323,7 @@ public class Node {
         StringBuilder sb = new StringBuilder();
         sb.append("USB1=").append(UCB1).append(" | ");
         sb.append("Mean=").append(mean).append(" | ");
+        sb.append("Visits=").append(visits).append(" | ");
         sb.append("Action=").append(action.getText()).append(" | ");
         sb.append("Node: [ ");
         sb.append("Pos=").append(pos).append(" | ");

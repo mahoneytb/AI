@@ -4,7 +4,6 @@ import problem.*;
 
 import java.util.ArrayList;
 import java.util.Random;
-import java.io.*;
 
 // The list of actions for any given node
 public class ActionSpace {
@@ -22,8 +21,6 @@ public class ActionSpace {
     private ArrayList<Integer> set_pressures;
 
     public ActionSpace(ProblemSpec ps, Node node) {
-
-
         this.ps = ps;
         car_type = new ArrayList();
         driver = new ArrayList();
@@ -61,7 +58,7 @@ public class ActionSpace {
             }
         }
 
-        if (previous != ActionType.CHANGE_TIRES) {
+        if (previous != ActionType.CHANGE_TIRES && previous != ActionType.CHANGE_TIRE_FUEL_PRESSURE) {
             for (int t = 0; t < n_tires; t++) {
                 if (t != ps.getTireOrder().indexOf(node.getTireModel())) {
                     tire_type.add(false);
@@ -74,7 +71,8 @@ public class ActionSpace {
         set_pressures.add(75);
         set_pressures.add(100);
 
-        if (ps.getLevel().isValidActionForLevel(ActionType.ADD_FUEL) && previous != ActionType.CHANGE_PRESSURE) {
+        if (ps.getLevel().isValidActionForLevel(ActionType.ADD_FUEL) && previous != ActionType.CHANGE_PRESSURE &&
+                previous != ActionType.CHANGE_TIRE_FUEL_PRESSURE) {
             for (int p = 0; p < 3; p++) {
                 if (!set_pressures.get(p).equals(node.getTirePressure())) {
                     pressure.add(false);
@@ -83,7 +81,7 @@ public class ActionSpace {
         }
     }
 
-    // Return a random action which is yet to be explored
+    // Return a random action which is yet to be explored, we do not consider refuelling
     public Action getNextUnexploredAction() {
         ArrayList<Integer> actions = new ArrayList<>();
         if (!move) {
@@ -94,7 +92,6 @@ public class ActionSpace {
         if (car_type.contains(false))   { actions.add(3); }
         if (driver.contains(false))     { actions.add(4); }
         if (tire_type.contains(false))  { actions.add(5); }
-        //if (!fuel)                      { actions.add(6); }
         if (pressure.contains(false))   { actions.add(6); }
         if (actions.isEmpty()) {
             return null;
@@ -154,6 +151,5 @@ public class ActionSpace {
         }
         return null;
     }
-
 
 }
