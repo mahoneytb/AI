@@ -42,7 +42,7 @@ public class ActionSpace {
 
         // We don't want to repeat an action unless move or refuel. And we don't want to consider
         // actions that are already part of our state
-        if (previous != ActionType.CHANGE_CAR) {
+        if (previous != ActionType.CHANGE_CAR && previous != ActionType.CHANGE_CAR_AND_DRIVER) {
             for (int c = 0; c < n_cars; c++) {
                 if (c != ps.getCarOrder().indexOf(node.getCarType())) {
                     car_type.add(false);
@@ -50,7 +50,7 @@ public class ActionSpace {
             }
         }
 
-        if (previous != ActionType.CHANGE_DRIVER) {
+        if (previous != ActionType.CHANGE_DRIVER && previous != ActionType.CHANGE_CAR_AND_DRIVER) {
             for (int d = 0; d < n_drivers; d++) {
                 if (d != ps.getDriverOrder().indexOf(node.getDriver())) {
                     driver.add(false);
